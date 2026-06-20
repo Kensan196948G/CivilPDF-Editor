@@ -13,20 +13,34 @@ files:
   - out/**
   - package.json
 
-# Windows: インストーラー(.exe / .msi 選択式)
+# Windows: インストーラー(.exe / .msi 選択式)。社内 IT 運用は MSI を標準とする。
 win:
   target:
-    - nsis
     - msi
+    - nsis
+  # 自己署名 PFX で署名する場合は CI で環境変数を設定:
+  #   CSC_LINK=<base64 or path of .pfx>  CSC_KEY_PASSWORD=<pfx password>
+  # 自己署名証明書はクライアントの「信頼されたルート/発行元」へ GPO/Intune で配布すること。
+  verifyUpdateCodeSignature: false
+  # MSI/EXE には外部ランタイム前提なし（Electron がランタイムを同梱）。
+
+# MSI: 完全サイレント (msiexec /i ... /qn) とコマンドライン削除に対応。
+# upgradeCode はバージョン跨ぎで固定（アップグレード・検出・一括削除の安定化）。
+msi:
+  oneClick: false
+  perMachine: true
+  runAfterFinish: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  upgradeCode: DFFC9F41-030E-4556-91EC-67BD02119845
+  artifactName: CivilPDF-Editor-${version}.${ext}
+
+# NSIS(.exe): MSI が使えない端末向けの無人実行対応 (/S サイレント)。
 nsis:
   oneClick: false
   perMachine: true
   allowToChangeInstallationDirectory: true
   artifactName: CivilPDF-Editor-Setup-${version}.${ext}
-msi:
-  oneClick: false
-  perMachine: true
-  artifactName: CivilPDF-Editor-${version}.${ext}
 
 # macOS: ディスクイメージ(.dmg) / インストーラー(.pkg / MDM 向け)
 mac:

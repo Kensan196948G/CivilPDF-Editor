@@ -5,6 +5,9 @@ dist-release/
 *.tsbuildinfo
 *.log
 .DS_Store
+certs/
+*.pfx
+*.cer
 .env
 .env.*
 !.env.example

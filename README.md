@@ -60,6 +60,20 @@ npm run package:mac  # .dmg + .pkg
 `APPS_RELEASE_BASE_URL` をこの Release アセットに向けることで配信ページから
 ダウンロード可能になります。
 
+### 🏢 社内 IT 運用（Windows MSI 標準）
+
+社内配布は **MSI を標準**とし、4 点標準（MSI 作成 / 署名 / サイレント対応 / アンインストール・検出条件）で管理します。
+詳細・`msiexec` コマンド・Intune/SCCM 検出規則・自己署名証明書手順は
+[docs/enterprise-deployment.md](docs/enterprise-deployment.md) を参照。
+
+| 項目                | 値                                                             |
+| ------------------- | -------------------------------------------------------------- |
+| UpgradeCode（固定） | `DFFC9F41-030E-4556-91EC-67BD02119845`                         |
+| サイレント導入      | `msiexec /i CivilPDF-Editor-<ver>.msi /qn /norestart`          |
+| サイレント削除      | `msiexec /x {ProductCode} /qn`                                 |
+| 署名                | 自己署名 PFX（社内向け・証明書をクライアント信頼ストアへ配布） |
+| 外部前提            | なし（Electron がランタイム同梱）                              |
+
 ---
 
 ## 🔐 セキュリティ

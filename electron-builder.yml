@@ -1,0 +1,43 @@
+# electron-builder packaging config.
+# artifactName は CivilPDF-DX コンソールの配信 API（api/apps.py）が期待する
+# ファイル名と一致させること（CivilPDF-Editor-Setup-${version}.exe 等）。
+appId: jp.civildx.editor
+productName: CivilPDF Editor
+copyright: Copyright © 2026 CivilPDF-DX
+
+directories:
+  buildResources: build
+  output: dist-release
+
+files:
+  - out/**
+  - package.json
+
+# Windows: インストーラー(.exe / .msi 選択式)
+win:
+  target:
+    - nsis
+    - msi
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  artifactName: CivilPDF-Editor-Setup-${version}.${ext}
+msi:
+  oneClick: false
+  perMachine: true
+  artifactName: CivilPDF-Editor-${version}.${ext}
+
+# macOS: ディスクイメージ(.dmg) / インストーラー(.pkg / MDM 向け)
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - pkg
+dmg:
+  artifactName: CivilPDF-Editor-${version}.${ext}
+pkg:
+  artifactName: CivilPDF-Editor-${version}.${ext}
+
+# ポータブル(.zip) は別途 zip ターゲットで生成可能（M1 では nsis/msi/dmg/pkg を基本）
+publish: null

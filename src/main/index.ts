@@ -1,5 +1,5 @@
 import { join } from "path";
-import { readFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 
 const isDev = !app.isPackaged;
@@ -48,6 +48,24 @@ ipcMain.handle("pdf:open", async () => {
     bytes: new Uint8Array(buf),
   };
 });
+
+/**
+ * Save stamped PDF bytes via a native save dialog.
+ * Returns the saved path, or null if cancelled.
+ */
+ipcMain.handle(
+  "pdf:save",
+  async (_event, payload: { bytes: Uint8Array; defaultName: string }) => {
+    const result = await dialog.showSaveDialog({
+      title: "押印済み PDF を保存",
+      defaultPath: payload.defaultName,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    await writeFile(result.filePath, Buffer.from(payload.bytes));
+    return result.filePath;
+  },
+);
 
 app.whenReady().then(() => {
   createWindow();

@@ -20,6 +20,7 @@
     "package:mac": "electron-vite build && electron-builder --mac dmg pkg"
   },
   "dependencies": {
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.7.76"
   },
   "devDependencies": {

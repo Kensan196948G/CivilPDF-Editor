@@ -1,5 +1,10 @@
 import { useState } from "react";
 import type { PDFPageProxy } from "pdfjs-dist";
+import {
+  open as dialogOpen,
+  save as dialogSave,
+} from "@tauri-apps/plugin-dialog";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { PdfPage } from "./components/PdfPage";
 import { StampToolbar } from "./components/StampToolbar";
 import { loadPdf } from "./lib/pdf";
@@ -25,14 +30,19 @@ export function App(): React.JSX.Element {
   const handleOpen = async (): Promise<void> => {
     setBusy(true);
     try {
-      const res = await window.api.openPdf();
-      if (!res) return;
-      const doc = await loadPdf(res.bytes);
+      const path = await dialogOpen({
+        multiple: false,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+      if (!path) return;
+      const bytes = await readFile(path as string);
+      const name = (path as string).split(/[/\\]/).pop() ?? "document.pdf";
+      const doc = await loadPdf(bytes);
       const loaded: PDFPageProxy[] = [];
       for (let n = 1; n <= doc.numPages; n += 1)
         loaded.push(await doc.getPage(n));
-      setFileName(res.name);
-      setOriginalBytes(res.bytes);
+      setFileName(name);
+      setOriginalBytes(bytes);
       setPages(loaded);
       setStamps([]);
       setTemplate(null);
@@ -76,8 +86,14 @@ export function App(): React.JSX.Element {
     try {
       const out = await embedStampsIntoPdf(originalBytes, stamps);
       const base = (fileName ?? "document.pdf").replace(/\.pdf$/i, "");
-      const saved = await window.api.savePdf(out, `${base}-stamped.pdf`);
-      if (saved) window.alert(`保存しました:\n${saved}`);
+      const savePath = await dialogSave({
+        defaultPath: `${base}-stamped.pdf`,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+      if (savePath) {
+        await writeFile(savePath as string, out);
+        window.alert(`保存しました:\n${savePath}`);
+      }
     } catch (e) {
       window.alert(`保存に失敗しました: ${String(e)}`);
     } finally {

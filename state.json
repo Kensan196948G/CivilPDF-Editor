@@ -3,10 +3,10 @@
     "name": "CivilPDF-Editor",
     "start_date": "2026-05-21",
     "release_deadline": "2026-11-21",
-    "phase_mode": "development"
+    "phase_mode": "release"
   },
-  "goal": "Issue #18 M6 リリース準備完了：CHANGELOG・v1.0.0 バージョン統一・PR #20 CI 通過・main merge 後 v1.0.0 タグ付け",
-  "phase": "Build",
+  "goal": "v1.0.0 正式リリース完了 — STABLE 達成・タグ付け・GitHub Release インストーラ生成確認",
+  "phase": "Verify",
   "kpi": {
     "success_rate_target": 0.9,
     "ci_success_rate": 1.0,
@@ -24,11 +24,18 @@
     "auto_issue_generation": true,
     "self_evolution": true
   },
-  "completed_issues": [8, 9, 10, 17],
-  "in_progress_issues": [18],
+  "completed_issues": [8, 9, 10, 17, 18],
+  "in_progress_issues": [],
   "blocked_issues": [],
-  "open_prs": [20],
-  "merged_prs": [12, 14, 15, 19],
+  "open_prs": [],
+  "merged_prs": [12, 14, 15, 19, 20],
+  "release": {
+    "version": "1.0.0",
+    "tag": "v1.0.0",
+    "tag_date": "2026-06-21",
+    "release_workflow_run": 27898193135,
+    "status": "release_workflow_running"
+  },
   "learning": {
     "failure_patterns": [
       "pdfjs-dist page.render() の戻り値は { promise, cancel } オブジェクト。cancel() のみ型定義されていることがある → 明示的に両方を型定義する",
@@ -44,7 +51,8 @@
       "RenderScheduler semaphore: module-levelカウンタ+キュー。.finally()でdrain()を呼ぶことで必ず空きスロットを解放",
       "Never-resolving Promise (new Promise<never>(() => {})) でテスト中に非同期コンポーネントを running 状態に固定できる。afterEach cleanup で unmount されるためリークしない",
       "HTMLCanvasElement.prototype.getContext = () => null を test-setup.ts に置くと jsdom の getContext 警告を全スイートに一括抑制できる",
-      "Tauri v2 バージョンは package.json / tauri.conf.json / Cargo.toml の 3 ファイルを同期させる必要がある"
+      "Tauri v2 バージョンは package.json / tauri.conf.json / Cargo.toml の 3 ファイルを同期させる必要がある",
+      "git tag -a（アノテーションタグ）でリリースタグを作成し push すると release.yml ワークフローが自動トリガーされ GitHub Release にインストーラが公開される"
     ]
   }
 }

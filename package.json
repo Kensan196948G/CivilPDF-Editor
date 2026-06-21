@@ -19,6 +19,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-fs": "^2",
+    "docx": "^9.7.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.7.76",
     "tesseract.js": "^5.1.1"

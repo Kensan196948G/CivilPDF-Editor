@@ -9,11 +9,13 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 interface OcrPanelProps {
   pages: PDFPageProxy[];
   originalBytes: Uint8Array;
+  /** Lift the OCR result into central state (for Word export / unified save). */
+  onResult?: (result: OcrDocumentResult) => void;
 }
 
 type Phase = "idle" | "running" | "done" | "cancelled" | "error";
 
-export function OcrPanel({ pages, originalBytes }: OcrPanelProps): React.JSX.Element {
+export function OcrPanel({ pages, originalBytes, onResult }: OcrPanelProps): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [pageResults, setPageResults] = useState<OcrPageResult[]>([]);
@@ -49,6 +51,12 @@ export function OcrPanel({ pages, originalBytes }: OcrPanelProps): React.JSX.Ele
       }
 
       setPhase("done");
+      onResult?.({
+        pages: results,
+        engine: "tesseract.js",
+        engineVersion: "5",
+        createdAt: new Date().toISOString(),
+      });
     } catch (e) {
       setError(String(e));
       setPhase("error");

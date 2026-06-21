@@ -6,8 +6,12 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:menu:default",
+    "core:webview:allow-print",
+    "core:window:allow-set-title",
     "dialog:allow-open",
     "dialog:allow-save",
+    "dialog:allow-confirm",
     {
       "identifier": "fs:allow-read-file",
       "allow": [

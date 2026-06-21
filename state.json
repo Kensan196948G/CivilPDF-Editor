@@ -5,7 +5,7 @@
     "release_deadline": "2026-11-21",
     "phase_mode": "development"
   },
-  "goal": "Issue #8 #9 #10 実装完了・main merge 済み。次: E2E統合テスト・パフォーマンス受入・リリース準備",
+  "goal": "M5 コンポーネント統合テスト完了・PR #19 CI 通過後 merge。次: Issue #18 M6 リリース準備（CHANGELOG・v1.0.0 タグ）",
   "phase": "Verify",
   "kpi": {
     "success_rate_target": 0.9,
@@ -24,22 +24,26 @@
     "auto_issue_generation": true,
     "self_evolution": true
   },
-  "completed_issues": [8, 9, 10],
+  "completed_issues": [8, 9, 10, 17],
   "in_progress_issues": [],
   "blocked_issues": [],
-  "open_prs": [],
+  "open_prs": [19],
   "merged_prs": [12, 14, 15],
   "learning": {
     "failure_patterns": [
       "pdfjs-dist page.render() の戻り値は { promise, cancel } オブジェクト。cancel() のみ型定義されていることがある → 明示的に両方を型定義する",
-      "並行ブランチが同一ファイル(App.tsx)を独立変更すると merge 時コンフリクト → 両方の変更を統合して解消"
+      "並行ブランチが同一ファイル(App.tsx)を独立変更すると merge 時コンフリクト → 両方の変更を統合して解消",
+      "@tauri-apps/api v2 には mockIPC は存在しない (v1 のみ) → vi.mock() でプラグインモジュールを直接差し替える",
+      "vi.mock() ファクトリはファイル先頭にホイストされる → 通常の const 宣言より前に評価。vi.hoisted() を使うとファクトリ内から安全に参照できる変数を宣言できる"
     ],
     "success_patterns": [
       "PageView strategy pattern: useMemo + useEffect 境界を正しく分離することでテストモックの更新が最小化できる",
       "ESLint flat config: src-tauri/target/** を ignores に追加しないとビルド成果物をlintしてしまう",
       "TileCache LRU実装: Map挿入順序を利用し、get()でre-insertしてMRUへ昇格。evict()はentries().next()でO(1)最古取得",
       "OffscreenCanvas + pdfjs transform: タイル座標分だけオフセットして描画し、createImageBitmapでビットマップ化",
-      "RenderScheduler semaphore: module-levelカウンタ+キュー。.finally()でdrain()を呼ぶことで必ず空きスロットを解放"
+      "RenderScheduler semaphore: module-levelカウンタ+キュー。.finally()でdrain()を呼ぶことで必ず空きスロットを解放",
+      "Never-resolving Promise (new Promise<never>(() => {})) でテスト中に非同期コンポーネントを running 状態に固定できる。afterEach cleanup で unmount されるためリークしない",
+      "HTMLCanvasElement.prototype.getContext = () => null を test-setup.ts に置くと jsdom の getContext 警告を全スイートに一括抑制できる"
     ]
   }
 }

@@ -5,8 +5,8 @@
     "release_deadline": "2026-11-21",
     "phase_mode": "release"
   },
-  "goal": "v1.0.0 正式リリース完了 — STABLE 達成・タグ付け・GitHub Release インストーラ生成確認",
-  "phase": "Verify",
+  "goal": "v1.1.0 正式リリース完了 — Phase A/B/C 全機能統合・PR #23/#24 マージ・リリースビルド確認",
+  "phase": "Release",
   "kpi": {
     "success_rate_target": 0.9,
     "ci_success_rate": 1.0,
@@ -28,17 +28,21 @@
   "in_progress_issues": [],
   "blocked_issues": [],
   "open_prs": [],
-  "merged_prs": [12, 14, 15, 19, 20],
+  "merged_prs": [12, 14, 15, 19, 20, 23, 24],
   "release": {
-    "version": "1.0.0",
-    "tag": "v1.0.0",
+    "version": "1.1.0",
+    "tag": "v1.1.0",
     "tag_date": "2026-06-21",
-    "release_workflow_run": 27898193135,
-    "status": "published_prerelease",
-    "published_at": "2026-06-21T08:12:41Z",
+    "release_workflow_run": 27905330437,
+    "status": "build_in_progress",
     "prerelease": true,
-    "assets_count": 7,
-    "url": "https://github.com/Kensan196948G/CivilPDF-Editor/releases/tag/v1.0.0"
+    "url": "https://github.com/Kensan196948G/CivilPDF-Editor/releases/tag/v1.1.0",
+    "previous": {
+      "version": "1.0.0",
+      "tag": "v1.0.0",
+      "published_at": "2026-06-21T08:12:41Z",
+      "assets_count": 7
+    }
   },
   "learning": {
     "failure_patterns": [

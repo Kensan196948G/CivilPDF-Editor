@@ -13,6 +13,13 @@ import { WatermarkDialog } from "./components/WatermarkDialog";
 import type { WatermarkConfig } from "./components/WatermarkDialog";
 import { MetadataDialog } from "./components/MetadataDialog";
 import { PasswordDialog } from "./components/PasswordDialog";
+import { ImageToPdfDialog } from "./components/ImageToPdfDialog";
+import { HeaderFooterDialog } from "./components/HeaderFooterDialog";
+import { ComparePdfDialog } from "./components/ComparePdfDialog";
+import { FormPanel } from "./components/FormPanel";
+import type { FormField } from "./lib/document/form-reader";
+import type { ImageEntry, PageSizePreset } from "./lib/document/image-to-pdf";
+import type { HfConfig } from "./lib/document/header-footer";
 import { useDocument } from "./lib/document/useDocument";
 import { useAppMenu, type MenuHandlers } from "./hooks/useAppMenu";
 import { formatBytes } from "./lib/format";
@@ -43,6 +50,10 @@ export function App(): React.JSX.Element {
   const [showWatermark, setShowWatermark] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showImageToPdf, setShowImageToPdf] = useState(false);
+  const [showHeaderFooter, setShowHeaderFooter] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [formFields, setFormFields] = useState<FormField[] | null>(null);
 
   const scrollToPage = (pageIndex: number): void => {
     document.getElementById(`page-${pageIndex}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -190,8 +201,42 @@ export function App(): React.JSX.Element {
             >
               🔐
             </button>
+            <span style={{ width: 1, background: "rgba(255,255,255,0.3)", alignSelf: "stretch", margin: "0 4px" }} />
+            <button
+              onClick={() => setShowHeaderFooter(true)}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              title="ヘッダー/フッター追加"
+            >
+              ⊤⊥
+            </button>
+            <button
+              onClick={() => setShowCompare(true)}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              title="PDF比較"
+            >
+              ⇆
+            </button>
+            <button
+              onClick={() => {
+                void doc.getFormFields().then((fields) => setFormFields(fields));
+              }}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: formFields !== null ? "#fff" : "rgba(255,255,255,0.15)", color: formFields !== null ? "#1e3a5f" : "#fff" }}
+              title="フォームフィールド確認"
+            >
+              📝
+            </button>
           </>
         )}
+        <button
+          onClick={() => setShowImageToPdf(true)}
+          style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff", marginLeft: hasDoc ? 0 : "auto" }}
+          title="画像→PDF変換"
+        >
+          🖼
+        </button>
       </header>
 
       {hasDoc && (
@@ -301,6 +346,13 @@ export function App(): React.JSX.Element {
             onRemove={doc.removeStamp}
           />
         )}
+
+        {formFields !== null && (
+          <FormPanel
+            fields={formFields}
+            onClose={() => setFormFields(null)}
+          />
+        )}
       </div>
 
       {showWatermark && (
@@ -332,6 +384,36 @@ export function App(): React.JSX.Element {
             void doc.saveAsEncrypted(opts);
           }}
           onClose={() => setShowPassword(false)}
+          busy={state.busy}
+        />
+      )}
+
+      {showImageToPdf && (
+        <ImageToPdfDialog
+          onConvert={(images: ImageEntry[], pageSize: PageSizePreset) => {
+            setShowImageToPdf(false);
+            void doc.convertImagesToPdf(images, pageSize);
+          }}
+          onClose={() => setShowImageToPdf(false)}
+          busy={state.busy}
+        />
+      )}
+
+      {showHeaderFooter && (
+        <HeaderFooterDialog
+          onApply={(config: HfConfig) => {
+            setShowHeaderFooter(false);
+            void doc.applyHf(config);
+          }}
+          onClose={() => setShowHeaderFooter(false)}
+          busy={state.busy}
+        />
+      )}
+
+      {showCompare && (
+        <ComparePdfDialog
+          onCompare={doc.compareWithPdf}
+          onClose={() => setShowCompare(false)}
           busy={state.busy}
         />
       )}

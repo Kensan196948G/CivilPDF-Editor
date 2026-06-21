@@ -7,6 +7,10 @@ import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { addWatermark, type WatermarkOptions } from "./watermark";
 import { encryptPdf, type EncryptOptions } from "./password";
 import { updatePdfMetadata, type PdfMetadata } from "./metadata";
+import { imagesToPdf, type ImageEntry, type PageSizePreset } from "./image-to-pdf";
+import { applyHeaderFooter, type HfConfig } from "./header-footer";
+import { comparePdfs, type CompareResult } from "./compare";
+import { readFormFields, type FormField } from "./form-reader";
 import type { Stamp } from "../types";
 import type { Annotation } from "../annotations/types";
 import type { OcrDocumentResult } from "../ocr/types";
@@ -398,6 +402,48 @@ export function useDocument() {
     }
   }, []);
 
+  // --- image-to-pdf ---
+  const convertImagesToPdf = useCallback(async (images: ImageEntry[], pageSize: PageSizePreset): Promise<void> => {
+    setBusy(true);
+    try {
+      const newBytes = await imagesToPdf({ images, pageSize });
+      const target = await pickSavePath("images.pdf");
+      if (target) await writeToPath(target, newBytes);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  // --- header / footer ---
+  const applyHf = useCallback(async (config: HfConfig): Promise<void> => {
+    const s = stateRef.current;
+    if (!s.docBytes) return;
+    setBusy(true);
+    try {
+      const newBytes = await applyHeaderFooter(s.docBytes, config);
+      const { doc, pages } = await loadPdfAndPages(newBytes);
+      pdfDocRef.current = doc;
+      dispatch({ type: "PAGE_EDIT", docBytes: newBytes, pages, remap: (i) => i });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  // --- compare ---
+  const compareWithPdf = useCallback(async (bytesB: Uint8Array): Promise<CompareResult> => {
+    const pdfA = pdfDocRef.current;
+    if (!pdfA) throw new Error("No document open");
+    const docB = await loadPdf(bytesB.slice());
+    return comparePdfs(pdfA, docB);
+  }, []);
+
+  // --- form fields ---
+  const getFormFields = useCallback(async (): Promise<FormField[]> => {
+    const pdfA = pdfDocRef.current;
+    if (!pdfA) return [];
+    return readFormFields(pdfA);
+  }, []);
+
   // --- misc ---
   const applyOcr = useCallback((result: OcrDocumentResult): void => {
     dispatch({ type: "APPLY_OCR", result });
@@ -436,6 +482,10 @@ export function useDocument() {
     applyWatermark,
     saveAsEncrypted,
     applyMetadata,
+    convertImagesToPdf,
+    applyHf,
+    compareWithPdf,
+    getFormFields,
     applyOcr,
     setScale,
     select,

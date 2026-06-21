@@ -69,7 +69,12 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "CivilPDF Editor ${{ github.ref_name }}"
           releaseBody: |
-            CivilPDF Editor ${{ github.ref_name }} — 未署名ベータ（M1 表示 + M2 電子印鑑）。
+            CivilPDF Editor ${{ github.ref_name }} — Windows / macOS / Linux 向けインストーラ（未署名ビルド）。
+
+            主な機能: PDF 表示・電子印鑑（テキスト/画像スタンプ）・OCR テキスト認識（日本語/英語）・
+            大判図面の最適化表示（LOD + タイルキャッシュ）。
+            このリリースの詳細な変更点は CHANGELOG を参照してください:
+            https://github.com/Kensan196948G/CivilPDF-Editor/blob/${{ github.ref_name }}/CHANGELOG.md
 
             ⚠️ コード署名 / Apple 公証は未設定のため、初回起動時に SmartScreen / Gatekeeper の警告が出ます。
             社内配布では信頼ストアへの証明書配布、または署名済みビルド（今後対応）を利用してください。

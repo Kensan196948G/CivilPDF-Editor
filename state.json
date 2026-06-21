@@ -1,0 +1,38 @@
+{
+  "project": {
+    "name": "CivilPDF-Editor",
+    "start_date": "2026-05-21",
+    "release_deadline": "2026-11-21",
+    "phase_mode": "development"
+  },
+  "goal": "Issue #8 #9 #10 実装完了。全テスト通過・CI成功・blocker=0・PR作成済み",
+  "phase": "Build",
+  "kpi": {
+    "success_rate_target": 0.9,
+    "ci_success_rate": 0.0,
+    "test_pass_rate": 1.0,
+    "security_critical": 0,
+    "blocker_count": 0
+  },
+  "execution": {
+    "max_duration_minutes": 300,
+    "repair_count": 0,
+    "max_repair": 3,
+    "same_error_limit": 2
+  },
+  "automation": {
+    "auto_issue_generation": true,
+    "self_evolution": true
+  },
+  "completed_issues": [],
+  "in_progress_issues": [9],
+  "blocked_issues": [],
+  "open_prs": [12],
+  "learning": {
+    "failure_patterns": [],
+    "success_patterns": [
+      "PageView strategy pattern: useMemo + useEffect 境界を正しく分離することでテストモックの更新が最小化できる",
+      "ESLint flat config: src-tauri/target/** を ignores に追加しないとビルド成果物をlintしてしまう"
+    ]
+  }
+}

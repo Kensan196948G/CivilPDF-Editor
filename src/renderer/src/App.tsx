@@ -5,7 +5,7 @@ import {
   save as dialogSave,
 } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { PdfPage } from "./components/PdfPage";
+import { PageView } from "./components/PageView";
 import { StampToolbar } from "./components/StampToolbar";
 import { loadPdf } from "./lib/pdf";
 import { embedStampsIntoPdf } from "./lib/embed";
@@ -168,7 +168,7 @@ export function App(): React.JSX.Element {
               全 {pages.length} ページ
             </div>
             {pages.map((p, i) => (
-              <PdfPage
+              <PageView
                 key={i}
                 page={p}
                 pageIndex={i}

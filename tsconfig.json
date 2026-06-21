@@ -16,5 +16,6 @@
       "@renderer/*": ["src/renderer/src/*"]
     }
   },
-  "include": ["src/renderer/src/**/*", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src/renderer/src/**/*", "vite.config.ts", "vitest.config.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/test-setup.ts"]
 }

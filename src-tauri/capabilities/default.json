@@ -9,7 +9,6 @@
     "core:menu:default",
     "core:webview:allow-print",
     "core:window:allow-set-title",
-    "core:window:allow-close-requested",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-confirm",

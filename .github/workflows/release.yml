@@ -1,8 +1,12 @@
 name: Release
 
-# Tag push (v*) builds installers per-OS and publishes them to a GitHub Release.
-# The CivilPDF-DX console's app distribution page consumes these release assets
-# via APPS_RELEASE_BASE_URL (see docs/deployment/app-distribution.md there).
+# Tag push (v*) builds installers per-OS with the official tauri-action and
+# publishes them to a GitHub Release. The CivilPDF-DX console's app distribution
+# page consumes these release assets via APPS_RELEASE_BASE_URL.
+#
+# NOTE: This is an UNSIGNED build. Windows code signing / Apple Developer ID
+# notarization are not configured yet (require certs/secrets — human task).
+# SmartScreen / Gatekeeper warnings are expected until signing is added.
 on:
   push:
     tags:
@@ -13,48 +17,62 @@ permissions:
 
 jobs:
   package:
-    name: Package (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Package (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            script: package:win
-          - os: macos-latest
-            script: package:mac
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - name: Package installers
-        run: npm run ${{ matrix.script }}
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: installers-${{ matrix.os }}
-          path: |
-            dist-release/*.exe
-            dist-release/*.msi
-            dist-release/*.dmg
-            dist-release/*.pkg
-          if-no-files-found: warn
 
-  release:
-    name: Publish GitHub Release
-    needs: package
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          path: artifacts
-          merge-multiple: true
-      - name: Create / update release
-        uses: softprops/action-gh-release@v2
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
         with:
-          files: artifacts/*
-          generate_release_notes: true
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Linux Tauri system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libfuse2
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build & publish installers
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "CivilPDF Editor ${{ github.ref_name }}"
+          releaseBody: |
+            CivilPDF Editor ${{ github.ref_name }} — 未署名ベータ（M1 表示 + M2 電子印鑑）。
+
+            ⚠️ コード署名 / Apple 公証は未設定のため、初回起動時に SmartScreen / Gatekeeper の警告が出ます。
+            社内配布では信頼ストアへの証明書配布、または署名済みビルド（今後対応）を利用してください。
+          releaseDraft: false
+          prerelease: true
+          args: ${{ matrix.args }}

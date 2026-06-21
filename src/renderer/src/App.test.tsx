@@ -26,6 +26,7 @@ vi.mock("./lib/embed", () => ({
 
 // PageView uses canvas + pdfjs render — replace with a simple div
 vi.mock("./components/PageView", () => ({
+  DEFAULT_SCALE: 1.2,
   PageView: ({
     pageIndex,
     placing,
@@ -42,6 +43,14 @@ vi.mock("./components/PageView", () => ({
       Page {pageIndex + 1}
     </div>
   ),
+}));
+
+vi.mock("./components/ZoomControls", () => ({
+  ZoomControls: () => <div data-testid="zoom-controls" />,
+}));
+
+vi.mock("./components/OcrPanel", () => ({
+  OcrPanel: () => <div data-testid="ocr-panel" />,
 }));
 
 vi.mock("./components/StampToolbar", () => ({

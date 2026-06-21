@@ -5,8 +5,9 @@ import {
   save as dialogSave,
 } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { PageView } from "./components/PageView";
+import { PageView, DEFAULT_SCALE } from "./components/PageView";
 import { StampToolbar } from "./components/StampToolbar";
+import { ZoomControls } from "./components/ZoomControls";
 import { OcrPanel } from "./components/OcrPanel";
 import { loadPdf } from "./lib/pdf";
 import { embedStampsIntoPdf } from "./lib/embed";
@@ -27,6 +28,7 @@ export function App(): React.JSX.Element {
   const [stamps, setStamps] = useState<Stamp[]>([]);
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scale, setScale] = useState(DEFAULT_SCALE);
 
   const handleOpen = async (): Promise<void> => {
     setBusy(true);
@@ -149,6 +151,9 @@ export function App(): React.JSX.Element {
       {originalBytes && pages.length > 0 && (
         <OcrPanel pages={pages} originalBytes={originalBytes} />
       )}
+      {pages.length > 0 && (
+        <ZoomControls scale={scale} onScale={setScale} />
+      )}
 
       <main
         style={{
@@ -179,6 +184,7 @@ export function App(): React.JSX.Element {
                 pageIndex={i}
                 stamps={stamps.filter((s) => s.page === i)}
                 placing={template !== null}
+                scale={scale}
                 onPlace={handlePlace}
                 onUpdate={handleUpdate}
                 onRemove={handleRemove}

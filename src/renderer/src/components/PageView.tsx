@@ -5,8 +5,11 @@ import { clamp01 } from "../lib/geometry";
 import { buildTileGrid } from "../lib/viewer/tile-grid";
 import type { TileRect } from "../lib/viewer/types";
 import { LARGE_PAGE_THRESHOLD } from "../lib/viewer/types";
+import { snapToLOD, lodCacheKey } from "../lib/viewer/lod";
+import { globalTileCache } from "../lib/viewer/tile-cache";
+import { scheduleRender } from "../lib/viewer/render-scheduler";
 
-const DEFAULT_SCALE = 1.2;
+export const DEFAULT_SCALE = 1.2;
 
 interface PageViewProps {
   page: PDFPageProxy;
@@ -73,7 +76,12 @@ export function PageView({
       }}
     >
       {useTile ? (
-        <TiledCanvasLayer page={page} viewport={viewport} />
+        <TiledCanvasLayer
+          page={page}
+          pageIndex={pageIndex}
+          viewport={viewport}
+          displayScale={scale}
+        />
       ) : (
         <SingleCanvas page={page} viewport={viewport} />
       )}
@@ -127,10 +135,14 @@ function SingleCanvas({
 
 function TiledCanvasLayer({
   page,
+  pageIndex,
   viewport,
+  displayScale,
 }: {
   page: PDFPageProxy;
+  pageIndex: number;
   viewport: ReturnType<PDFPageProxy["getViewport"]>;
+  displayScale: number;
 }): React.JSX.Element {
   const grid = useMemo(
     () => buildTileGrid(viewport.width, viewport.height),
@@ -143,8 +155,10 @@ function TiledCanvasLayer({
         <TileCanvas
           key={`${tile.col}-${tile.row}`}
           page={page}
+          pageIndex={pageIndex}
           viewport={viewport}
           tile={tile}
+          displayScale={displayScale}
         />
       ))}
     </>
@@ -153,33 +167,75 @@ function TiledCanvasLayer({
 
 function TileCanvas({
   page,
+  pageIndex,
   viewport,
   tile,
+  displayScale,
 }: {
   page: PDFPageProxy;
+  pageIndex: number;
   viewport: ReturnType<PDFPageProxy["getViewport"]>;
   tile: TileRect;
+  displayScale: number;
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.width = tile.w;
-    canvas.height = tile.h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    // Shift the coordinate origin so only this tile's slice of the page is
-    // rendered into the (tile.w × tile.h) canvas.
-    const transform: [number, number, number, number, number, number] = [
-      1, 0, 0, 1, -tile.x, -tile.y,
-    ];
-    const task = page.render({ canvasContext: ctx, viewport, transform });
-    task.promise.catch(() => {});
+
+    // LOD: snap render scale to nearest anchor ≥ display scale.
+    const lodScale = snapToLOD(displayScale);
+    const ratio = lodScale / displayScale;
+    const renderW = Math.round(tile.w * ratio);
+    const renderH = Math.round(tile.h * ratio);
+    const cacheKey = `${pageIndex}-${tile.col}-${tile.row}-${lodCacheKey(displayScale)}`;
+
+    // --- Cache hit: draw immediately ---
+    const cached = globalTileCache.get(cacheKey);
+    if (cached) {
+      canvas.width = tile.w;
+      canvas.height = tile.h;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(cached, 0, 0, tile.w, tile.h);
+      return;
+    }
+
+    // --- Cache miss: schedule render ---
+    let cancelled = false;
+    let renderTask: { promise: Promise<void>; cancel(): void } | null = null;
+
+    scheduleRender(async () => {
+      if (cancelled) return;
+
+      const lodViewport = page.getViewport({ scale: lodScale });
+      const offscreen = new OffscreenCanvas(renderW, renderH);
+      const ctx = offscreen.getContext("2d") as unknown as CanvasRenderingContext2D;
+
+      // Shift so only this tile's region is drawn into the offscreen canvas.
+      const transform: [number, number, number, number, number, number] = [
+        1, 0, 0, 1, -Math.round(tile.x * ratio), -Math.round(tile.y * ratio),
+      ];
+
+      renderTask = page.render({ canvasContext: ctx, viewport: lodViewport, transform });
+      await renderTask.promise;
+      if (cancelled) return;
+
+      const bitmap = await createImageBitmap(offscreen);
+      globalTileCache.set(cacheKey, bitmap, renderW, renderH);
+
+      // Draw scaled to the display tile size.
+      canvas.width = tile.w;
+      canvas.height = tile.h;
+      const visCtx = canvas.getContext("2d");
+      visCtx?.drawImage(bitmap, 0, 0, tile.w, tile.h);
+    }).catch(() => {});
+
     return () => {
-      task.cancel();
+      cancelled = true;
+      renderTask?.cancel();
     };
-  }, [page, viewport, tile]);
+  }, [page, pageIndex, viewport, tile, displayScale]);
 
   return (
     <canvas

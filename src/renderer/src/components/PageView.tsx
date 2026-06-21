@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PDFPageProxy } from "pdfjs-dist";
 import type { Stamp } from "../lib/types";
+import type { Annotation } from "../lib/annotations/types";
 import { clamp01 } from "../lib/geometry";
+import { AnnotationOverlay } from "./AnnotationOverlay";
+import type { AnnotTool } from "./AnnotToolbar";
 import { buildTileGrid } from "../lib/viewer/tile-grid";
 import type { TileRect } from "../lib/viewer/types";
 import { LARGE_PAGE_THRESHOLD } from "../lib/viewer/types";
@@ -17,12 +20,17 @@ interface PageViewProps {
   stamps: Stamp[];
   placing: boolean;
   scale?: number;
+  annotations?: Annotation[];
+  activeTool?: AnnotTool | null;
+  activeColor?: string;
   onPlace: (pageIndex: number, x: number, y: number) => void;
   onUpdate: (
     id: string,
     partial: Partial<Pick<Stamp, "x" | "y" | "w">>,
   ) => void;
   onRemove: (id: string) => void;
+  onAddAnnotation?: (annot: Annotation) => void;
+  onRemoveAnnotation?: (id: string) => void;
 }
 
 /**
@@ -39,9 +47,14 @@ export function PageView({
   stamps,
   placing,
   scale = DEFAULT_SCALE,
+  annotations = [],
+  activeTool = null,
+  activeColor = "#ffeb3b",
   onPlace,
   onUpdate,
   onRemove,
+  onAddAnnotation = () => {},
+  onRemoveAnnotation = () => {},
 }: PageViewProps): React.JSX.Element {
   const viewport = useMemo(() => page.getViewport({ scale }), [page, scale]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -95,6 +108,17 @@ export function PageView({
           onRemove={onRemove}
         />
       ))}
+
+      <AnnotationOverlay
+        pageIndex={pageIndex}
+        annotations={annotations}
+        activeTool={activeTool}
+        activeColor={activeColor}
+        viewportWidth={viewport.width}
+        viewportHeight={viewport.height}
+        onAdd={onAddAnnotation}
+        onRemove={onRemoveAnnotation}
+      />
     </div>
   );
 }

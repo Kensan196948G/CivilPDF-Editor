@@ -5,10 +5,20 @@ import { ZoomControls } from "./components/ZoomControls";
 import { OcrPanel } from "./components/OcrPanel";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { PagePanel } from "./components/PagePanel";
+import { AnnotToolbar } from "./components/AnnotToolbar";
+import type { AnnotTool } from "./components/AnnotToolbar";
+import { SearchPanel } from "./components/SearchPanel";
+import { BookmarkPanel } from "./components/BookmarkPanel";
+import { WatermarkDialog } from "./components/WatermarkDialog";
+import type { WatermarkConfig } from "./components/WatermarkDialog";
+import { MetadataDialog } from "./components/MetadataDialog";
+import { PasswordDialog } from "./components/PasswordDialog";
 import { useDocument } from "./lib/document/useDocument";
 import { useAppMenu, type MenuHandlers } from "./hooks/useAppMenu";
 import { formatBytes } from "./lib/format";
 import type { Stamp } from "./lib/types";
+import type { Annotation } from "./lib/annotations/types";
+import type { EncryptOptions } from "./lib/document/password";
 
 const DEFAULT_STAMP_WIDTH = 0.15; // fraction of page width
 const ZOOM_STEP = 0.25;
@@ -26,6 +36,17 @@ export function App(): React.JSX.Element {
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
   const [author, setAuthor] = useState("");
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
+  const [activeTool, setActiveTool] = useState<AnnotTool | null>(null);
+  const [activeColor, setActiveColor] = useState("#ffeb3b");
+  const [showSearch, setShowSearch] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showWatermark, setShowWatermark] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const scrollToPage = (pageIndex: number): void => {
+    document.getElementById(`page-${pageIndex}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const clampScale = (s: number): number =>
     Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(s * 100) / 100));
@@ -94,6 +115,16 @@ export function App(): React.JSX.Element {
     return map;
   }, [state.stamps]);
 
+  const annotsByPage = useMemo(() => {
+    const map = new Map<number, Annotation[]>();
+    for (const a of state.annotations) {
+      const arr = map.get(a.page) ?? [];
+      arr.push(a);
+      map.set(a.page, arr);
+    }
+    return map;
+  }, [state.annotations]);
+
   return (
     <div style={rootStyle}>
       <header style={headerStyle}>
@@ -120,6 +151,45 @@ export function App(): React.JSX.Element {
             >
               確定保存
             </button>
+            <span style={{ width: 1, background: "rgba(255,255,255,0.3)", alignSelf: "stretch", margin: "0 4px" }} />
+            <button
+              onClick={() => setShowSearch((v) => !v)}
+              style={{ ...headerBtn, background: showSearch ? "#fff" : "rgba(255,255,255,0.15)", color: showSearch ? "#1e3a5f" : "#fff" }}
+              title="テキスト検索"
+            >
+              🔍
+            </button>
+            <button
+              onClick={() => setShowBookmarks((v) => !v)}
+              style={{ ...headerBtn, background: showBookmarks ? "#fff" : "rgba(255,255,255,0.15)", color: showBookmarks ? "#1e3a5f" : "#fff" }}
+              title="目次・ブックマーク"
+            >
+              📑
+            </button>
+            <button
+              onClick={() => setShowWatermark(true)}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              title="透かし追加"
+            >
+              🖊
+            </button>
+            <button
+              onClick={() => setShowMetadata(true)}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              title="文書プロパティ"
+            >
+              📋
+            </button>
+            <button
+              onClick={() => setShowPassword(true)}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              title="パスワード保護"
+            >
+              🔐
+            </button>
           </>
         )}
       </header>
@@ -131,6 +201,15 @@ export function App(): React.JSX.Element {
           onSetTemplate={setTemplate}
           onClearTemplate={() => setTemplate(null)}
           onAuthorChange={setAuthor}
+        />
+      )}
+
+      {hasDoc && (
+        <AnnotToolbar
+          activeTool={activeTool}
+          activeColor={activeColor}
+          onToolChange={setActiveTool}
+          onColorChange={setActiveColor}
         />
       )}
 
@@ -158,7 +237,14 @@ export function App(): React.JSX.Element {
         <ZoomControls scale={state.scale} onScale={doc.setScale} />
       )}
 
+      {hasDoc && showSearch && state.pages.length > 0 && (
+        <SearchPanel pages={state.pages} onNavigate={scrollToPage} />
+      )}
+
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        {hasDoc && showBookmarks && (
+          <BookmarkPanel pdfDoc={doc.pdfDocProxy} onNavigate={scrollToPage} />
+        )}
         <main style={mainStyle}>
           {state.pages.length === 0 ? (
             <div style={{ textAlign: "center", color: "#888", marginTop: 80 }}>
@@ -177,6 +263,7 @@ export function App(): React.JSX.Element {
               {state.pages.map((p, i) => (
                 <div
                   key={`${state.revision}-${i}`}
+                  id={`page-${i}`}
                   style={{
                     outline: selectedPage === i ? "2px solid #1e3a5f" : "none",
                     outlineOffset: 2,
@@ -188,9 +275,14 @@ export function App(): React.JSX.Element {
                     stamps={stampsByPage.get(i) ?? []}
                     placing={template !== null}
                     scale={state.scale}
+                    annotations={annotsByPage.get(i) ?? []}
+                    activeTool={activeTool}
+                    activeColor={activeColor}
                     onPlace={handlePlace}
                     onUpdate={doc.updateStamp}
                     onRemove={doc.removeStamp}
+                    onAddAnnotation={doc.addAnnotation}
+                    onRemoveAnnotation={doc.removeAnnotation}
                   />
                 </div>
               ))}
@@ -210,6 +302,39 @@ export function App(): React.JSX.Element {
           />
         )}
       </div>
+
+      {showWatermark && (
+        <WatermarkDialog
+          onApply={(cfg: WatermarkConfig) => {
+            setShowWatermark(false);
+            void doc.applyWatermark(cfg);
+          }}
+          onClose={() => setShowWatermark(false)}
+          busy={state.busy}
+        />
+      )}
+
+      {showMetadata && (
+        <MetadataDialog
+          onSave={(meta) => {
+            setShowMetadata(false);
+            void doc.applyMetadata(meta);
+          }}
+          onClose={() => setShowMetadata(false)}
+          busy={state.busy}
+        />
+      )}
+
+      {showPassword && (
+        <PasswordDialog
+          onSave={(opts: EncryptOptions) => {
+            setShowPassword(false);
+            void doc.saveAsEncrypted(opts);
+          }}
+          onClose={() => setShowPassword(false)}
+          busy={state.busy}
+        />
+      )}
     </div>
   );
 }

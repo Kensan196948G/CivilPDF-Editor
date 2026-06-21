@@ -3,7 +3,10 @@ import { open as dialogOpen, confirm } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { loadPdf } from "../pdf";
-import type { PDFPageProxy } from "pdfjs-dist";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import { addWatermark, type WatermarkOptions } from "./watermark";
+import { encryptPdf, type EncryptOptions } from "./password";
+import { updatePdfMetadata, type PdfMetadata } from "./metadata";
 import type { Stamp } from "../types";
 import type { Annotation } from "../annotations/types";
 import type { OcrDocumentResult } from "../ocr/types";
@@ -29,12 +32,14 @@ import { printDocument } from "./print";
 import { documentReducer } from "./reducer";
 import { initialDocumentState, type PageIndexMap } from "./types";
 
-async function getAllPages(bytes: Uint8Array): Promise<PDFPageProxy[]> {
+async function loadPdfAndPages(
+  bytes: Uint8Array,
+): Promise<{ doc: PDFDocumentProxy; pages: PDFPageProxy[] }> {
   // Pass a copy: pdf.js may transfer/detach the underlying buffer.
   const doc = await loadPdf(bytes.slice());
   const pages: PDFPageProxy[] = [];
   for (let n = 1; n <= doc.numPages; n += 1) pages.push(await doc.getPage(n));
-  return pages;
+  return { doc, pages };
 }
 
 function baseName(path: string): string {
@@ -49,6 +54,9 @@ export function useDocument() {
   // Mirror state into a ref so window-event listeners read the latest value.
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Holds the live PDFDocumentProxy for outline queries; updated on every open/edit.
+  const pdfDocRef = useRef<PDFDocumentProxy | null>(null);
 
   const now = (): string => new Date().toISOString();
   const setBusy = (busy: boolean): void => dispatch({ type: "SET_BUSY", busy });
@@ -90,7 +98,8 @@ export function useDocument() {
     setBusy(true);
     try {
       const bytes = await readFile(path as string);
-      const pages = await getAllPages(bytes);
+      const { doc, pages } = await loadPdfAndPages(bytes);
+      pdfDocRef.current = doc;
       const { stamps, annotations } = await loadReviewState(bytes);
       dispatch({
         type: "OPEN_SUCCESS",
@@ -219,14 +228,14 @@ export function useDocument() {
       // Bake overlay for WYSIWYG output when present, otherwise print as-is.
       const hasOverlay = s.stamps.length > 0 || s.annotations.length > 0;
       const pages = hasOverlay && s.docBytes
-        ? await getAllPages(
+        ? (await loadPdfAndPages(
             await buildFinalizedBytes({
               docBytes: s.docBytes,
               stamps: s.stamps,
               annotations: s.annotations,
               ocrResult: s.ocrResult,
             }),
-          )
+          )).pages
         : s.pages;
       await printDocument(pages);
     } finally {
@@ -237,7 +246,8 @@ export function useDocument() {
   // --- page editing (rebuild model) ---
   const applyEdit = useCallback(
     async (newBytes: Uint8Array, remap: PageIndexMap): Promise<void> => {
-      const pages = await getAllPages(newBytes);
+      const { doc, pages } = await loadPdfAndPages(newBytes);
+      pdfDocRef.current = doc;
       dispatch({ type: "PAGE_EDIT", docBytes: newBytes, pages, remap });
     },
     [],
@@ -342,6 +352,52 @@ export function useDocument() {
     dispatch({ type: "REMOVE_ANNOT", id });
   }, []);
 
+  // --- watermark ---
+  const applyWatermark = useCallback(async (opts: WatermarkOptions): Promise<void> => {
+    const s = stateRef.current;
+    if (!s.docBytes) return;
+    setBusy(true);
+    try {
+      const newBytes = await addWatermark(s.docBytes, opts);
+      const { doc, pages } = await loadPdfAndPages(newBytes);
+      pdfDocRef.current = doc;
+      dispatch({ type: "PAGE_EDIT", docBytes: newBytes, pages, remap: (i) => i });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  // --- password-protected save-as (does not change in-memory state) ---
+  const saveAsEncrypted = useCallback(async (opts: EncryptOptions): Promise<void> => {
+    const s = stateRef.current;
+    if (!s.docBytes) return;
+    const target = await pickSavePath(
+      withExtension(s.fileName ?? "document.pdf", "pdf").replace(/\.pdf$/i, "-encrypted.pdf"),
+    );
+    if (!target) return;
+    setBusy(true);
+    try {
+      const encBytes = await encryptPdf(s.docBytes, opts);
+      await writeToPath(target, encBytes);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  // --- metadata edit ---
+  const applyMetadata = useCallback(async (meta: PdfMetadata): Promise<void> => {
+    const s = stateRef.current;
+    if (!s.docBytes) return;
+    setBusy(true);
+    try {
+      const newBytes = await updatePdfMetadata(s.docBytes, meta);
+      // Metadata does not change page structure; reuse existing pdfjs pages.
+      dispatch({ type: "PAGE_EDIT", docBytes: newBytes, pages: s.pages, remap: (i) => i });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   // --- misc ---
   const applyOcr = useCallback((result: OcrDocumentResult): void => {
     dispatch({ type: "APPLY_OCR", result });
@@ -356,6 +412,8 @@ export function useDocument() {
   return {
     state,
     canSave: state.docBytes !== null,
+    /** Live PDFDocumentProxy — updated on open/edit; used by BookmarkPanel for getOutline(). */
+    get pdfDocProxy() { return pdfDocRef.current; },
     open,
     save,
     saveAs,
@@ -375,6 +433,9 @@ export function useDocument() {
     comment,
     addAnnotation,
     removeAnnotation,
+    applyWatermark,
+    saveAsEncrypted,
+    applyMetadata,
     applyOcr,
     setScale,
     select,

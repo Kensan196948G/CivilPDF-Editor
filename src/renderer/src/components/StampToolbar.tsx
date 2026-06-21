@@ -13,14 +13,18 @@ interface Template {
 
 interface Props {
   template: Template | null;
+  author: string;
   onSetTemplate: (t: Template) => void;
   onClearTemplate: () => void;
+  onAuthorChange: (author: string) => void;
 }
 
 export function StampToolbar({
   template,
+  author,
   onSetTemplate,
   onClearTemplate,
+  onAuthorChange,
 }: Props): React.JSX.Element {
   const [name, setName] = useState("承認");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -72,6 +76,22 @@ export function StampToolbar({
         <button onClick={makeTextStamp} style={btn}>
           丸印を作成
         </button>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <label htmlFor="stampAuthor">レビュー担当</label>
+        <input
+          id="stampAuthor"
+          value={author}
+          placeholder="担当者名"
+          onChange={(e) => onAuthorChange(e.target.value)}
+          style={{
+            width: 100,
+            padding: "4px 6px",
+            border: "1px solid #ccc",
+            borderRadius: 4,
+          }}
+        />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

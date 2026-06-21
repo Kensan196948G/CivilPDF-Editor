@@ -1,32 +1,46 @@
-import { vi, describe, it, expect, afterEach } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  act,
-} from "@testing-library/react";
-import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
+import type { DocumentState } from "./lib/document/types";
+import { initialDocumentState } from "./lib/document/types";
 
-// ── hoisted vi.mock calls ──────────────────────────────────────────────────
-// pdfjs-dist uses ?worker at module eval time — mock the whole lib/pdf module
-vi.mock("./lib/pdf", () => ({
-  loadPdf: vi.fn().mockResolvedValue({
-    numPages: 2,
-    getPage: vi.fn().mockResolvedValue({}),
-  }),
+// ── controllable fake document controller ──────────────────────────────────
+const controller = {
+  state: initialDocumentState() as DocumentState,
+  canSave: false,
+  open: vi.fn(),
+  save: vi.fn(),
+  saveAs: vi.fn(),
+  finalize: vi.fn(),
+  exportDocx: vi.fn(),
+  exportImages: vi.fn(),
+  print: vi.fn(),
+  rotate: vi.fn(),
+  removePages: vi.fn(),
+  reorder: vi.fn(),
+  insertFromFile: vi.fn(),
+  addStamp: vi.fn(),
+  updateStamp: vi.fn(),
+  removeStamp: vi.fn(),
+  approve: vi.fn(),
+  reject: vi.fn(),
+  comment: vi.fn(),
+  addAnnotation: vi.fn(),
+  removeAnnotation: vi.fn(),
+  applyOcr: vi.fn(),
+  setScale: vi.fn(),
+  select: vi.fn(),
+};
+
+vi.mock("./lib/document/useDocument", () => ({
+  useDocument: () => controller,
 }));
 
-vi.mock("./lib/embed", () => ({
-  embedStampsIntoPdf: vi
-    .fn()
-    .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46])),
-  dataUrlToBytes: vi.fn().mockReturnValue(new Uint8Array()),
+const useAppMenuSpy = vi.fn();
+vi.mock("./hooks/useAppMenu", () => ({
+  useAppMenu: (...args: unknown[]) => useAppMenuSpy(...args),
 }));
 
-// PageView uses canvas + pdfjs render — replace with a simple div
 vi.mock("./components/PageView", () => ({
-  DEFAULT_SCALE: 1.2,
   PageView: ({
     pageIndex,
     placing,
@@ -61,133 +75,94 @@ vi.mock("./components/StampToolbar", () => ({
   }) => (
     <button
       data-testid="set-template"
-      onClick={() =>
-        onSetTemplate({
-          src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==",
-          ratio: 1,
-        })
-      }
+      onClick={() => onSetTemplate({ src: "data:image/png;base64,AAAA", ratio: 1 })}
     >
       Set Template
     </button>
   ),
 }));
 
-// ── import App after mocks are in place ───────────────────────────────────
 import { App } from "./App";
 
-// Minimal %PDF bytes for IPC mock
-const MOCK_PDF = [0x25, 0x50, 0x44, 0x46];
+function openDoc(pages = 2): void {
+  controller.state = {
+    ...initialDocumentState(),
+    filePath: "/home/user/test.pdf",
+    fileName: "test.pdf",
+    docBytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+    pages: Array.from({ length: pages }, () => ({}) as never),
+  };
+  controller.canSave = true;
+}
 
-// ── tests ──────────────────────────────────────────────────────────────────
+beforeEach(() => {
+  controller.state = initialDocumentState();
+  controller.canSave = false;
+  vi.clearAllMocks();
+});
+
 describe("App — 初期状態", () => {
   it("未選択時: 開くボタンあり、保存ボタン非表示、プレースホルダー表示", () => {
     render(<App />);
     expect(screen.getByText("PDF を開く")).toBeInTheDocument();
-    expect(screen.queryByText(/押印して保存（/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/PDF を開いて電子印鑑を押印します/),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("確定保存")).not.toBeInTheDocument();
+    expect(screen.getByText(/PDF を開いて編集・押印・変換します/)).toBeInTheDocument();
+  });
+
+  it("ネイティブメニューを canSave とともに登録する", () => {
+    render(<App />);
+    expect(useAppMenuSpy).toHaveBeenCalled();
+    const lastCall = useAppMenuSpy.mock.calls.at(-1)!;
+    expect(lastCall[1]).toBe(false); // canSave
   });
 });
 
-describe("App — handleOpen IPC フロー", () => {
-  afterEach(() => {
-    clearMocks();
-    vi.clearAllMocks();
-  });
-
-  it("ダイアログキャンセル (null) → ページ情報表示なし", async () => {
-    mockIPC((cmd) => {
-      if (cmd === "plugin:dialog|open") return null;
-    });
+describe("App — open フロー", () => {
+  it("「PDF を開く」クリックで controller.open を呼ぶ", () => {
     render(<App />);
-    await act(async () => {
-      fireEvent.click(screen.getByText("PDF を開く"));
-    });
-    expect(screen.queryByText(/全.*ページ/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("PDF を開く"));
+    expect(controller.open).toHaveBeenCalledTimes(1);
   });
+});
 
-  it("PDF 選択成功 → ファイル名・全2ページ表示、保存ボタン出現", async () => {
-    mockIPC((cmd) => {
-      if (cmd === "plugin:dialog|open") return "/home/user/test.pdf";
-      if (cmd === "plugin:fs|read_file") return MOCK_PDF;
-    });
+describe("App — ドキュメント表示", () => {
+  it("PDF 読込済み: ファイル名・全2ページ・保存/確定保存・レビューパネル表示", () => {
+    openDoc(2);
     render(<App />);
-    await act(async () => {
-      fireEvent.click(screen.getByText("PDF を開く"));
-    });
-    await waitFor(() => screen.getByText(/全 2 ページ/));
+    expect(screen.getByText(/全 2 ページ/)).toBeInTheDocument();
     expect(screen.getByText(/test\.pdf/)).toBeInTheDocument();
-    expect(screen.getByText(/押印して保存/)).toBeInTheDocument();
+    expect(screen.getByText("確定保存")).toBeInTheDocument();
+    expect(screen.getByText(/印鑑レビュー/)).toBeInTheDocument();
   });
 
-  it("PDF 読込後: 印鑑0個のとき保存ボタンは disabled", async () => {
-    mockIPC((cmd) => {
-      if (cmd === "plugin:dialog|open") return "/home/user/sample.pdf";
-      if (cmd === "plugin:fs|read_file") return MOCK_PDF;
-    });
+  it("「保存」クリックで controller.save を呼ぶ", () => {
+    openDoc();
     render(<App />);
-    await act(async () => {
-      fireEvent.click(screen.getByText("PDF を開く"));
-    });
-    await waitFor(() => screen.getByText(/押印して保存/));
-    expect(screen.getByText(/押印して保存/)).toBeDisabled();
+    fireEvent.click(screen.getByText(/^保存/));
+    expect(controller.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("「確定保存」クリックで controller.finalize を呼ぶ", () => {
+    openDoc();
+    render(<App />);
+    fireEvent.click(screen.getByText("確定保存"));
+    expect(controller.finalize).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("App — handleSave IPC フロー", () => {
-  afterEach(() => {
-    clearMocks();
-    vi.clearAllMocks();
-  });
-
-  it("印鑑1個配置後に保存 → writeFile が1回呼ばれる", async () => {
-    const writeFileCalled = vi.fn();
-    mockIPC((cmd) => {
-      if (cmd === "plugin:dialog|open") return "/home/user/test.pdf";
-      if (cmd === "plugin:fs|read_file") return MOCK_PDF;
-      if (cmd === "plugin:dialog|save") return "/home/user/test-stamped.pdf";
-      if (cmd === "plugin:fs|write_file") {
-        writeFileCalled();
-        return null;
-      }
-    });
-
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
-
+describe("App — 押印フロー", () => {
+  it("テンプレート選択後にページクリックで addStamp を呼ぶ", () => {
+    openDoc(1);
     render(<App />);
-
-    // 1. PDF を開く
-    await act(async () => {
-      fireEvent.click(screen.getByText("PDF を開く"));
-    });
-    await waitFor(() => screen.getByText(/全 2 ページ/));
-
-    // 2. テンプレート設定
-    await act(async () => {
+    act(() => {
       fireEvent.click(screen.getByTestId("set-template"));
     });
-
-    // 3. ページに印鑑を配置 (placing=true のときにクリックで onPlace 呼ばれる)
-    await act(async () => {
+    act(() => {
       fireEvent.click(screen.getByTestId("pdf-page-0"));
     });
-
-    // 4. 保存ボタンが有効になるまで待機
-    await waitFor(() => {
-      expect(screen.getByText(/押印して保存（1）/)).not.toBeDisabled();
-    });
-
-    // 5. 保存実行
-    await act(async () => {
-      fireEvent.click(screen.getByText(/押印して保存（1）/));
-    });
-
-    await waitFor(() => {
-      expect(writeFileCalled).toHaveBeenCalledTimes(1);
-    });
-
-    alertSpy.mockRestore();
+    expect(controller.addStamp).toHaveBeenCalledTimes(1);
+    const stamp = controller.addStamp.mock.calls[0][0];
+    expect(stamp.status).toBe("pending");
+    expect(stamp.page).toBe(0);
   });
 });

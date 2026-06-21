@@ -53,7 +53,7 @@ export function documentReducer(
         docBytes: action.docBytes,
         pages: action.pages,
         stamps: action.stamps,
-        annotations: [],
+        annotations: action.annotations,
         ocrResult: null,
         selectedId: null,
         dirty: false,

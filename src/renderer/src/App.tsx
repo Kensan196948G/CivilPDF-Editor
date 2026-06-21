@@ -1,20 +1,19 @@
-import { useState } from "react";
-import type { PDFPageProxy } from "pdfjs-dist";
-import {
-  open as dialogOpen,
-  save as dialogSave,
-} from "@tauri-apps/plugin-dialog";
-import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { PageView, DEFAULT_SCALE } from "./components/PageView";
+import { useState, useMemo } from "react";
+import { PageView } from "./components/PageView";
 import { StampToolbar } from "./components/StampToolbar";
 import { ZoomControls } from "./components/ZoomControls";
 import { OcrPanel } from "./components/OcrPanel";
-import { loadPdf } from "./lib/pdf";
-import { embedStampsIntoPdf } from "./lib/embed";
+import { ReviewPanel } from "./components/ReviewPanel";
+import { PagePanel } from "./components/PagePanel";
+import { useDocument } from "./lib/document/useDocument";
+import { useAppMenu, type MenuHandlers } from "./hooks/useAppMenu";
 import { formatBytes } from "./lib/format";
 import type { Stamp } from "./lib/types";
 
 const DEFAULT_STAMP_WIDTH = 0.15; // fraction of page width
+const ZOOM_STEP = 0.25;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 4.0;
 
 interface ActiveTemplate {
   src: string;
@@ -22,183 +21,224 @@ interface ActiveTemplate {
 }
 
 export function App(): React.JSX.Element {
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [originalBytes, setOriginalBytes] = useState<Uint8Array | null>(null);
-  const [pages, setPages] = useState<PDFPageProxy[]>([]);
-  const [stamps, setStamps] = useState<Stamp[]>([]);
+  const doc = useDocument();
+  const { state } = doc;
   const [template, setTemplate] = useState<ActiveTemplate | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [scale, setScale] = useState(DEFAULT_SCALE);
+  const [author, setAuthor] = useState("");
+  const [selectedPage, setSelectedPage] = useState<number | null>(null);
 
-  const handleOpen = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      const path = await dialogOpen({
-        multiple: false,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (!path) return;
-      const bytes = await readFile(path as string);
-      const name = (path as string).split(/[/\\]/).pop() ?? "document.pdf";
-      const doc = await loadPdf(bytes);
-      const loaded: PDFPageProxy[] = [];
-      for (let n = 1; n <= doc.numPages; n += 1)
-        loaded.push(await doc.getPage(n));
-      setFileName(name);
-      setOriginalBytes(bytes);
-      setPages(loaded);
-      setStamps([]);
-      setTemplate(null);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const clampScale = (s: number): number =>
+    Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(s * 100) / 100));
 
   const handlePlace = (pageIndex: number, x: number, y: number): void => {
     if (!template) return;
-    setStamps((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        page: pageIndex,
-        x,
-        y,
-        w: DEFAULT_STAMP_WIDTH,
-        ratio: template.ratio,
-        src: template.src,
-      },
-    ]);
+    const stamp: Stamp = {
+      id: crypto.randomUUID(),
+      page: pageIndex,
+      x,
+      y,
+      w: DEFAULT_STAMP_WIDTH,
+      ratio: template.ratio,
+      src: template.src,
+      author,
+      createdAt: new Date().toISOString(),
+      status: "pending",
+      history: [],
+    };
+    doc.addStamp(stamp);
   };
 
-  const handleUpdate = (
-    id: string,
-    partial: Partial<Pick<Stamp, "x" | "y" | "w">>,
-  ): void => {
-    setStamps((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...partial } : s)),
-    );
+  const handleMovePage = (direction: -1 | 1): void => {
+    if (selectedPage === null) return;
+    const target = selectedPage + direction;
+    if (target < 0 || target >= state.pages.length) return;
+    const order = state.pages.map((_, i) => i);
+    [order[selectedPage], order[target]] = [order[target], order[selectedPage]];
+    void doc.reorder(order);
+    setSelectedPage(target);
   };
 
-  const handleRemove = (id: string): void => {
-    setStamps((prev) => prev.filter((s) => s.id !== id));
+  // Menu handlers — rebuilt each render so the menu always calls current state.
+  const menuHandlers: MenuHandlers = {
+    "file.open": doc.open,
+    "file.save": doc.save,
+    "file.saveAs": doc.saveAs,
+    "file.finalize": () => doc.finalize(),
+    "file.exportDocx": doc.exportDocx,
+    "file.exportImages": doc.exportImages,
+    "file.print": doc.print,
+    "edit.rotateCw": () => {
+      if (selectedPage !== null) void doc.rotate([selectedPage], 90);
+    },
+    "edit.rotateCcw": () => {
+      if (selectedPage !== null) void doc.rotate([selectedPage], -90);
+    },
+    "edit.deletePage": () => {
+      if (selectedPage !== null) void doc.removePages([selectedPage]);
+    },
+    "edit.insertFrom": () => doc.insertFromFile(selectedPage ?? state.pages.length),
+    "view.zoomIn": () => doc.setScale(clampScale(state.scale + ZOOM_STEP)),
+    "view.zoomOut": () => doc.setScale(clampScale(state.scale - ZOOM_STEP)),
+    "view.zoomReset": () => doc.setScale(1.0),
   };
+  useAppMenu(menuHandlers, doc.canSave);
 
-  const handleSave = async (): Promise<void> => {
-    if (!originalBytes) return;
-    setBusy(true);
-    try {
-      const out = await embedStampsIntoPdf(originalBytes, stamps);
-      const base = (fileName ?? "document.pdf").replace(/\.pdf$/i, "");
-      const savePath = await dialogSave({
-        defaultPath: `${base}-stamped.pdf`,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (savePath) {
-        await writeFile(savePath as string, out);
-        window.alert(`保存しました:\n${savePath}`);
-      }
-    } catch (e) {
-      window.alert(`保存に失敗しました: ${String(e)}`);
-    } finally {
-      setBusy(false);
+  const hasDoc = state.docBytes !== null;
+  const stampsByPage = useMemo(() => {
+    const map = new Map<number, Stamp[]>();
+    for (const s of state.stamps) {
+      const arr = map.get(s.page) ?? [];
+      arr.push(s);
+      map.set(s.page, arr);
     }
-  };
+    return map;
+  }, [state.stamps]);
 
   return (
-    <div
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        color: "#1a1a1a",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 16px",
-          background: "#1e3a5f",
-          color: "#fff",
-        }}
-      >
+    <div style={rootStyle}>
+      <header style={headerStyle}>
         <strong style={{ fontSize: 15 }}>CivilPDF Editor</strong>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>電子印鑑</span>
-        <button onClick={handleOpen} disabled={busy} style={headerBtn}>
-          {busy ? "処理中..." : "PDF を開く"}
+        <span style={{ fontSize: 12, opacity: 0.8 }}>
+          編集・印鑑・OCR・変換
+        </span>
+        <button onClick={() => void doc.open()} disabled={state.busy} style={{ ...headerBtn, marginLeft: "auto" }}>
+          {state.busy ? "処理中..." : "PDF を開く"}
         </button>
-        {originalBytes && (
-          <button
-            onClick={handleSave}
-            disabled={busy || stamps.length === 0}
-            style={{ ...headerBtn, background: "#16a34a", color: "#fff" }}
-          >
-            押印して保存（{stamps.length}）
-          </button>
+        {hasDoc && (
+          <>
+            <button
+              onClick={() => void doc.save()}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: "#16a34a", color: "#fff" }}
+            >
+              保存{state.dirty ? " *" : ""}
+            </button>
+            <button
+              onClick={() => void doc.finalize()}
+              disabled={state.busy}
+              style={{ ...headerBtn, background: "#1e3a5f", color: "#fff" }}
+            >
+              確定保存
+            </button>
+          </>
         )}
       </header>
 
-      {originalBytes && (
+      {hasDoc && (
         <StampToolbar
           template={template}
+          author={author}
           onSetTemplate={setTemplate}
           onClearTemplate={() => setTemplate(null)}
+          onAuthorChange={setAuthor}
         />
       )}
 
-      {originalBytes && pages.length > 0 && (
-        <OcrPanel pages={pages} originalBytes={originalBytes} />
-      )}
-      {pages.length > 0 && (
-        <ZoomControls scale={scale} onScale={setScale} />
+      {hasDoc && (
+        <PagePanel
+          pageCount={state.pages.length}
+          selectedPage={selectedPage}
+          busy={state.busy}
+          onSelectPage={setSelectedPage}
+          onRotate={(delta) => selectedPage !== null && void doc.rotate([selectedPage], delta)}
+          onDelete={() => selectedPage !== null && void doc.removePages([selectedPage])}
+          onMove={handleMovePage}
+          onInsert={() => void doc.insertFromFile(selectedPage ?? state.pages.length)}
+        />
       )}
 
-      <main
-        style={{
-          flex: 1,
-          overflow: "auto",
-          padding: 16,
-          background: "#f4f5f7",
-        }}
-      >
-        {pages.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#888", marginTop: 80 }}>
-            <p style={{ fontSize: 15 }}>PDF を開いて電子印鑑を押印します</p>
-            <p style={{ fontSize: 12 }}>
-              印影を作成 → ページをクリックで配置 → ドラッグ移動・リサイズ →
-              押印して保存
-            </p>
-          </div>
-        ) : (
-          <>
-            <div style={{ marginBottom: 12, fontSize: 13, color: "#444" }}>
-              📄 {fileName}（{formatBytes(originalBytes?.byteLength ?? 0)}） /
-              全 {pages.length} ページ
+      {hasDoc && state.pages.length > 0 && (
+        <OcrPanel
+          pages={state.pages}
+          originalBytes={state.docBytes!}
+          onResult={doc.applyOcr}
+        />
+      )}
+      {state.pages.length > 0 && (
+        <ZoomControls scale={state.scale} onScale={doc.setScale} />
+      )}
+
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        <main style={mainStyle}>
+          {state.pages.length === 0 ? (
+            <div style={{ textAlign: "center", color: "#888", marginTop: 80 }}>
+              <p style={{ fontSize: 15 }}>PDF を開いて編集・押印・変換します</p>
+              <p style={{ fontSize: 12 }}>
+                ファイルメニュー（または「PDF を開く」）から開始 →
+                ページ編集・注釈・押印 → 保存／印刷／Word 書き出し
+              </p>
             </div>
-            {pages.map((p, i) => (
-              <PageView
-                key={i}
-                page={p}
-                pageIndex={i}
-                stamps={stamps.filter((s) => s.page === i)}
-                placing={template !== null}
-                scale={scale}
-                onPlace={handlePlace}
-                onUpdate={handleUpdate}
-                onRemove={handleRemove}
-              />
-            ))}
-          </>
+          ) : (
+            <>
+              <div style={{ marginBottom: 12, fontSize: 13, color: "#444" }}>
+                📄 {state.fileName}（{formatBytes(state.docBytes?.byteLength ?? 0)}） /
+                全 {state.pages.length} ページ
+              </div>
+              {state.pages.map((p, i) => (
+                <div
+                  key={`${state.revision}-${i}`}
+                  style={{
+                    outline: selectedPage === i ? "2px solid #1e3a5f" : "none",
+                    outlineOffset: 2,
+                  }}
+                >
+                  <PageView
+                    page={p}
+                    pageIndex={i}
+                    stamps={stampsByPage.get(i) ?? []}
+                    placing={template !== null}
+                    scale={state.scale}
+                    onPlace={handlePlace}
+                    onUpdate={doc.updateStamp}
+                    onRemove={doc.removeStamp}
+                  />
+                </div>
+              ))}
+            </>
+          )}
+        </main>
+
+        {hasDoc && (
+          <ReviewPanel
+            stamps={state.stamps}
+            selectedId={state.selectedId}
+            author={author}
+            onSelect={doc.select}
+            onApprove={doc.approve}
+            onReject={doc.reject}
+            onRemove={doc.removeStamp}
+          />
         )}
-      </main>
+      </div>
     </div>
   );
 }
 
+const rootStyle: React.CSSProperties = {
+  fontFamily: "system-ui, sans-serif",
+  height: "100vh",
+  display: "flex",
+  flexDirection: "column",
+  color: "#1a1a1a",
+};
+
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  padding: "10px 16px",
+  background: "#1e3a5f",
+  color: "#fff",
+};
+
+const mainStyle: React.CSSProperties = {
+  flex: 1,
+  overflow: "auto",
+  padding: 16,
+  background: "#f4f5f7",
+};
+
 const headerBtn: React.CSSProperties = {
-  marginLeft: "auto",
   padding: "6px 14px",
   borderRadius: 6,
   border: "none",

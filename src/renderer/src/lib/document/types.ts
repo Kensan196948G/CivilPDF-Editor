@@ -34,6 +34,7 @@ export type DocumentAction =
       docBytes: Uint8Array;
       pages: PDFPageProxy[];
       stamps: Stamp[]; // restored from review round-trip, or []
+      annotations: Annotation[]; // restored from review round-trip, or []
     }
   | {
       type: "PAGE_EDIT";

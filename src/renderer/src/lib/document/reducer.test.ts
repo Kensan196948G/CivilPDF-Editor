@@ -49,6 +49,7 @@ describe("documentReducer dirty tracking", () => {
       docBytes: new Uint8Array(),
       pages: [],
       stamps: [],
+      annotations: [],
     });
     expect(next.dirty).toBe(false);
     expect(next.filePath).toBe("/a.pdf");

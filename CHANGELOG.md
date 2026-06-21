@@ -9,8 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🆕 Added — M7 機能拡張（v1.1.0 開発中・PR #23）
+
+#### アプリ骨格
+- 中央ドキュメントモデル `lib/document/`（`useReducer`・dirty 遷移を 1 箇所に集約・ページ index remap）
+- ネイティブメニュー（`@tauri-apps/api/menu`）— ファイル/編集/表示・アクセラレータ・ref レジストリで stale closure 回避
+- 保存基盤の刷新 — フルパス保持・上書き保存（`CmdOrCtrl+S`）/ 名前を付けて保存・ウィンドウタイトル dirty 表示・閉じる前ガード
+- 印刷 — 印刷専用レンダリング（150DPI）+ `window.print()`（大判 PDF 対応・押印/注釈を焼き込んで WYSIWYG 出力）
+
+#### 編集
+- ページ操作 `lib/page-ops.ts` — 回転 / 削除 / 並べ替え / 空白挿入 / 別 PDF 挿入 / 結合 / 分割（`PageIndexMap` で注釈・印鑑を追従）
+- 注釈マークアップ `lib/annotations/` — ハイライト / 下線 / 取消線 / 付箋 / フリーハンドのベクター焼き込み
+
+#### 変換
+- Word(.docx) 書き出し — `docx` + pdfjs テキスト抽出（行クラスタリング）/ OCR フォールバック・`Packer.toBlob`（webview 互換）
+- 画像書き出し — PNG / JPEG（OffscreenCanvas）
+
+#### 電子印鑑レビュー
+- `Stamp` 型を後方互換拡張（作成者 / 日時 / status / コメント / 履歴）+ `normalizeStamp`
+- レビュー UI（`ReviewPanel`）— 一覧・承認/却下/コメント・status フィルタ・集計・append-only 監査履歴
+- 2 方式保存 — **非破壊レビュー保存**（PDF Info 辞書 JSON round-trip で再編集/承認可・DX 交換可能な `civilpdf.review/v1` 契約）と **確定保存**（フラット化・承認済みのみ焼き込みオプション）
+
+#### 依存・テスト
+- `docx ^9.7.1` 追加（本番依存の脆弱性 0 件）
+- テスト 75 → 136（中央モデル / レビュー round-trip / ページ操作 / 注釈 / 変換の純粋関数を網羅）
+
+### 🔜 引き続き予定
 - コードサイニング（Windows EV証明書 / Apple Developer ID + 公証）
 - 日本語テキスト完全埋め込み（@pdf-lib/fontkit + NotoSansJP TTF サブセット）
+- 本文テキスト直接編集・レイアウト保持の高精度 Word 変換（後続フェーズ）
+- 注釈の描画 UI（オーバーレイ）本実装・ページサムネイル D&D・手動 E2E 検証
 - Playwright + Tauri v2 WebView による E2E シナリオテスト
 
 ---

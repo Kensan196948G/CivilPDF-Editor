@@ -5,11 +5,11 @@
     "release_deadline": "2026-11-21",
     "phase_mode": "development"
   },
-  "goal": "Issue #8 #9 #10 実装完了。全テスト通過・CI成功・blocker=0・PR作成済み",
-  "phase": "Build",
+  "goal": "Issue #8 #9 #10 実装完了・main merge 済み。次: E2E統合テスト・パフォーマンス受入・リリース準備",
+  "phase": "Verify",
   "kpi": {
     "success_rate_target": 0.9,
-    "ci_success_rate": 0.0,
+    "ci_success_rate": 1.0,
     "test_pass_rate": 1.0,
     "security_critical": 0,
     "blocker_count": 0
@@ -24,15 +24,22 @@
     "auto_issue_generation": true,
     "self_evolution": true
   },
-  "completed_issues": [],
-  "in_progress_issues": [9],
+  "completed_issues": [8, 9, 10],
+  "in_progress_issues": [],
   "blocked_issues": [],
-  "open_prs": [12],
+  "open_prs": [],
+  "merged_prs": [12, 14, 15],
   "learning": {
-    "failure_patterns": [],
+    "failure_patterns": [
+      "pdfjs-dist page.render() の戻り値は { promise, cancel } オブジェクト。cancel() のみ型定義されていることがある → 明示的に両方を型定義する",
+      "並行ブランチが同一ファイル(App.tsx)を独立変更すると merge 時コンフリクト → 両方の変更を統合して解消"
+    ],
     "success_patterns": [
       "PageView strategy pattern: useMemo + useEffect 境界を正しく分離することでテストモックの更新が最小化できる",
-      "ESLint flat config: src-tauri/target/** を ignores に追加しないとビルド成果物をlintしてしまう"
+      "ESLint flat config: src-tauri/target/** を ignores に追加しないとビルド成果物をlintしてしまう",
+      "TileCache LRU実装: Map挿入順序を利用し、get()でre-insertしてMRUへ昇格。evict()はentries().next()でO(1)最古取得",
+      "OffscreenCanvas + pdfjs transform: タイル座標分だけオフセットして描画し、createImageBitmapでビットマップ化",
+      "RenderScheduler semaphore: module-levelカウンタ+キュー。.finally()でdrain()を呼ぶことで必ず空きスロットを解放"
     ]
   }
 }

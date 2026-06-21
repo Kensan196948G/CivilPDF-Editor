@@ -8,6 +8,7 @@ import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { PageView, DEFAULT_SCALE } from "./components/PageView";
 import { StampToolbar } from "./components/StampToolbar";
 import { ZoomControls } from "./components/ZoomControls";
+import { OcrPanel } from "./components/OcrPanel";
 import { loadPdf } from "./lib/pdf";
 import { embedStampsIntoPdf } from "./lib/embed";
 import { formatBytes } from "./lib/format";
@@ -147,6 +148,9 @@ export function App(): React.JSX.Element {
         />
       )}
 
+      {originalBytes && pages.length > 0 && (
+        <OcrPanel pages={pages} originalBytes={originalBytes} />
+      )}
       {pages.length > 0 && (
         <ZoomControls scale={scale} onScale={setScale} />
       )}

@@ -49,6 +49,10 @@ vi.mock("./components/ZoomControls", () => ({
   ZoomControls: () => <div data-testid="zoom-controls" />,
 }));
 
+vi.mock("./components/OcrPanel", () => ({
+  OcrPanel: () => <div data-testid="ocr-panel" />,
+}));
+
 vi.mock("./components/StampToolbar", () => ({
   StampToolbar: ({
     onSetTemplate,

@@ -7,6 +7,7 @@ import {
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { PageView } from "./components/PageView";
 import { StampToolbar } from "./components/StampToolbar";
+import { OcrPanel } from "./components/OcrPanel";
 import { loadPdf } from "./lib/pdf";
 import { embedStampsIntoPdf } from "./lib/embed";
 import { formatBytes } from "./lib/format";
@@ -143,6 +144,10 @@ export function App(): React.JSX.Element {
           onSetTemplate={setTemplate}
           onClearTemplate={() => setTemplate(null)}
         />
+      )}
+
+      {originalBytes && pages.length > 0 && (
+        <OcrPanel pages={pages} originalBytes={originalBytes} />
       )}
 
       <main

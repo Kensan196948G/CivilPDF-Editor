@@ -34,7 +34,11 @@
     "tag": "v1.0.0",
     "tag_date": "2026-06-21",
     "release_workflow_run": 27898193135,
-    "status": "release_workflow_running"
+    "status": "published_prerelease",
+    "published_at": "2026-06-21T08:12:41Z",
+    "prerelease": true,
+    "assets_count": 7,
+    "url": "https://github.com/Kensan196948G/CivilPDF-Editor/releases/tag/v1.0.0"
   },
   "learning": {
     "failure_patterns": [

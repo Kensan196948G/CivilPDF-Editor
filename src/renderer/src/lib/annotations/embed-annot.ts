@@ -130,6 +130,53 @@ function drawInk(
 }
 
 /**
+ * Draw a text-edit annotation: first burn a white rectangle (whiteout) over
+ * the original text bounding box, then draw the replacement text on top.
+ *
+ * Helvetica (StandardFonts) only covers printable ASCII.  Non-ASCII characters
+ * are stripped so that embedding never throws; the caller's UI should warn the
+ * user if the resulting string would be empty.
+ */
+function drawTextEdit(
+  page: PDFPage,
+  rect: FracRect,
+  newText: string,
+  fontSize: number,
+  font: PDFFont,
+  pw: number,
+  ph: number,
+): void {
+  const r = fracRectToPdf(rect, pw, ph);
+
+  // 1. Whiteout: paint white rectangle over the original text area.
+  page.drawRectangle({
+    x: r.x,
+    y: r.y,
+    width: r.width,
+    height: r.height,
+    color: rgb(1, 1, 1),
+    opacity: 1,
+  });
+
+  // 2. Strip non-ASCII characters (Helvetica limitation).
+  const safeText = newText.replace(/[^\x20-\x7E]/g, "");
+  if (!safeText) return; // nothing printable to draw
+
+  // 3. Clamp font size to fit within the whiteout box height.
+  const size = Math.max(4, Math.min(fontSize, r.height * 0.85));
+
+  // 4. Draw replacement text at the baseline (r.y + small margin).
+  page.drawText(safeText, {
+    x: r.x + 1,
+    y: r.y + (r.height - size) / 2,
+    size,
+    font,
+    color: rgb(0, 0, 0),
+    maxWidth: r.width - 2,
+  });
+}
+
+/**
  * Burn the given annotations into the PDF using vector drawing and return the
  * new bytes. Annotations referencing a non-existent page are skipped.
  */
@@ -169,6 +216,9 @@ export async function embedAnnotationsIntoPdf(
         break;
       case "ink":
         drawInk(page, annot.strokes, color, annot.width, pw, ph);
+        break;
+      case "textedit":
+        drawTextEdit(page, annot.rect, annot.newText, annot.fontSize, await getFont(), pw, ph);
         break;
     }
   }

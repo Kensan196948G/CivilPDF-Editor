@@ -3,12 +3,13 @@ import type { AnnotKind } from "../lib/annotations/types";
 export type AnnotTool = AnnotKind | "erase";
 
 const TOOLS: { id: AnnotTool; label: string; title: string }[] = [
-  { id: "highlight",  label: "蛍光ペン",   title: "テキストをハイライト（ドラッグ）" },
-  { id: "underline",  label: "下線",       title: "下線を引く（ドラッグ）" },
-  { id: "strikeout",  label: "取消線",     title: "取消線を引く（ドラッグ）" },
-  { id: "note",       label: "付箋",       title: "付箋を貼る（クリック）" },
-  { id: "ink",        label: "手書き",     title: "手書き描画（ドラッグ）" },
-  { id: "erase",      label: "消去",       title: "注釈をクリックして消去" },
+  { id: "textedit",   label: "テキスト編集", title: "テキストをクリックして内容を変更（ホワイトアウト＋新テキスト）" },
+  { id: "highlight",  label: "蛍光ペン",     title: "テキストをハイライト（ドラッグ）" },
+  { id: "underline",  label: "下線",         title: "下線を引く（ドラッグ）" },
+  { id: "strikeout",  label: "取消線",       title: "取消線を引く（ドラッグ）" },
+  { id: "note",       label: "付箋",         title: "付箋を貼る（クリック）" },
+  { id: "ink",        label: "手書き",       title: "手書き描画（ドラッグ）" },
+  { id: "erase",      label: "消去",         title: "注釈をクリックして消去" },
 ];
 
 const PRESET_COLORS = ["#ffeb3b", "#4caf50", "#2196f3", "#f44336", "#9c27b0", "#ff9800"];

@@ -8,8 +8,9 @@ import fontUrl from "../../assets/fonts/NotoSansJP-Regular.otf?url";
  * NotoSansJP (SIL OFL 1.1, see assets/fonts/OFL.txt) and embed it as a subset so
  * only the glyphs actually used end up in the output PDF (a few KB, not 4.5 MB).
  *
- * The fetch is isolated in this tiny module so tests can mock it (jsdom cannot
- * resolve Vite asset URLs at runtime).
+ * Loaded with a same-origin fetch of the bundled asset (works in the Tauri
+ * webview under `connect-src 'self'`). The fetch is isolated here so tests can
+ * mock it (jsdom cannot resolve Vite asset URLs at runtime).
  */
 let cache: Uint8Array | null = null;
 

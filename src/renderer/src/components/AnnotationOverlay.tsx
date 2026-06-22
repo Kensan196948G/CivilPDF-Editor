@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { Annotation, FracPoint, InkAnnot, NoteAnnot, RectAnnot } from "../lib/annotations/types";
+import type { Annotation, FracPoint, InkAnnot, NoteAnnot, RectAnnot, TextEditAnnot } from "../lib/annotations/types";
 import type { AnnotTool } from "./AnnotToolbar";
 import { clamp01 } from "../lib/geometry";
 
@@ -120,6 +120,49 @@ function InkAnnotSvg({ annot, onErase }: { annot: InkAnnot; onErase?: (id: strin
           />
         );
       })}
+    </g>
+  );
+}
+
+/**
+ * On-screen preview of a text edit: a white rectangle (whiteout) over the
+ * original text, with the replacement text drawn on top. Mirrors what
+ * {@link embedAnnotationsIntoPdf} burns into the PDF, so the user sees the edit
+ * immediately. SVG <text> uses the system font, so Japanese renders on screen.
+ */
+function TextEditAnnotSvg({
+  annot,
+  viewportHeight,
+  onErase,
+}: {
+  annot: TextEditAnnot;
+  viewportHeight: number;
+  onErase?: (id: string) => void;
+}): React.JSX.Element {
+  const onClick = onErase ? (e: React.MouseEvent) => { e.stopPropagation(); onErase(annot.id); } : undefined;
+  const r = annot.rect;
+  // Box height on screen (px); size the text to ~80% of it.
+  const boxPx = Math.max(6, r.h * viewportHeight);
+  const fontPx = Math.max(6, Math.min(annot.fontSize, boxPx * 0.85));
+  return (
+    <g onClick={onClick} style={{ cursor: onErase ? "pointer" : "default" }}>
+      <rect
+        x={`${r.x * 100}%`}
+        y={`${r.y * 100}%`}
+        width={`${r.w * 100}%`}
+        height={`${r.h * 100}%`}
+        fill="#ffffff"
+      />
+      <text
+        x={`calc(${r.x * 100}% + 1px)`}
+        y={`${(r.y + r.h / 2) * 100}%`}
+        dominantBaseline="central"
+        fontSize={fontPx}
+        fill="#000000"
+      >
+        {annot.newText}
+      </text>
+      {annot.originalText && <title>元: {annot.originalText}</title>}
     </g>
   );
 }
@@ -276,6 +319,16 @@ export function AnnotationOverlay({
           }
           if (a.kind === "note") return <NoteAnnotSvg key={a.id} annot={a} onErase={erase} />;
           if (a.kind === "ink") return <InkAnnotSvg key={a.id} annot={a} onErase={erase} />;
+          if (a.kind === "textedit") {
+            return (
+              <TextEditAnnotSvg
+                key={a.id}
+                annot={a}
+                viewportHeight={viewportHeight}
+                onErase={erase}
+              />
+            );
+          }
           return null;
         })}
 

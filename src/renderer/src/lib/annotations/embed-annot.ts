@@ -1,7 +1,7 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import type { RGB, PDFFont, PDFPage } from "pdf-lib";
-import type { Annotation, FracRect } from "./types";
+import type { Annotation, FracRect, TextEditAnnot } from "./types";
 import { fracPointToPdf, fracRectToPdf } from "../geometry";
 import { loadCjkFontBytes } from "./cjk-font";
 
@@ -133,24 +133,24 @@ function drawInk(
 }
 
 /**
- * Draw a text-edit annotation: first burn a white rectangle (whiteout) over
- * the original text bounding box, then draw the replacement text on top.
+ * Draw a text-edit annotation: first burn a white rectangle (whiteout) over the
+ * original text, then draw the replacement text on the SAME baseline at the
+ * SAME size as the original.
  *
- * Uses the bundled NotoSansJP font, so Japanese (and other CJK) replacement
- * text renders correctly rather than being dropped. The font size is shrunk to
- * keep the new text on a single line within the whiteout box width (CJK has no
- * spaces, so pdf-lib's word-wrap would not help).
+ * Position/size come from page-height fractions (baselineFrac / fontHeightFrac),
+ * so the PDF baseline lands exactly on the original text's baseline. Uses the
+ * bundled NotoSansJP font so Japanese renders. The size is shrunk only if the
+ * replacement would overflow the whiteout width (CJK has no spaces, so pdf-lib's
+ * word-wrap would not help).
  */
 async function drawTextEdit(
   page: PDFPage,
-  rect: FracRect,
-  newText: string,
-  fontSize: number,
+  annot: TextEditAnnot,
   getFont: () => Promise<PDFFont>,
   pw: number,
   ph: number,
 ): Promise<void> {
-  const r = fracRectToPdf(rect, pw, ph);
+  const r = fracRectToPdf(annot.rect, pw, ph);
 
   // 1. Whiteout: paint white rectangle over the original text area.
   page.drawRectangle({
@@ -164,23 +164,25 @@ async function drawTextEdit(
 
   // Nothing to draw (e.g. text deletion): skip font embedding entirely so an
   // unused subset (zero glyphs) never reaches fontkit, which would throw.
-  if (!newText) return;
+  if (!annot.newText) return;
   const font = await getFont();
 
-  // 2. Start from the original font size, clamped to the box height.
-  let size = Math.max(4, Math.min(fontSize, r.height * 0.85));
+  // 2. Size = original font height (points); baseline = original baseline (pt,
+  //    bottom-origin). pdf-lib's drawText y IS the baseline.
+  let size = Math.max(4, annot.fontHeightFrac * ph);
+  const baselineY = ph - annot.baselineFrac * ph;
 
-  // 3. Shrink to fit the box width on a single line (min 4pt).
+  // 3. Shrink to fit the whiteout width on a single line (min 4pt).
   const maxWidth = Math.max(1, r.width - 2);
-  const textWidth = font.widthOfTextAtSize(newText, size);
+  const textWidth = font.widthOfTextAtSize(annot.newText, size);
   if (textWidth > maxWidth) {
     size = Math.max(4, (size * maxWidth) / textWidth);
   }
 
-  // 4. Draw the replacement text vertically centred in the whiteout box.
-  page.drawText(newText, {
+  // 4. Draw the replacement text on the original baseline.
+  page.drawText(annot.newText, {
     x: r.x + 1,
-    y: r.y + (r.height - size) / 2,
+    y: baselineY,
     size,
     font,
     color: rgb(0, 0, 0),
@@ -234,7 +236,7 @@ export async function embedAnnotationsIntoPdf(
         drawInk(page, annot.strokes, color, annot.width, pw, ph);
         break;
       case "textedit":
-        await drawTextEdit(page, annot.rect, annot.newText, annot.fontSize, getFont, pw, ph);
+        await drawTextEdit(page, annot, getFont, pw, ph);
         break;
     }
   }

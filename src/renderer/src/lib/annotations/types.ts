@@ -48,13 +48,22 @@ export interface InkAnnot extends AnnotBase {
   width: number; // stroke width as fraction of page width (0..1)
 }
 
-/** Text edit: draws a white rectangle over the original text, then overlays new text. */
+/**
+ * Text edit: draws a white rectangle over the original text, then overlays new
+ * text on the SAME baseline at the SAME size as the original.
+ *
+ * Position/size are stored as page-height fractions (scale-independent) so the
+ * on-screen overlay (px) and the burned PDF (pt) place the text identically:
+ *   - on screen: y = baselineFrac * viewportHeight, fontPx = fontHeightFrac * viewportHeight
+ *   - in PDF:    y = pageH - baselineFrac * pageH,   size   = fontHeightFrac * pageH
+ */
 export interface TextEditAnnot extends AnnotBase {
   kind: "textedit";
-  rect: FracRect; // bounding box of the original text (for whiteout)
+  rect: FracRect; // whiteout box covering the original text
+  baselineFrac: number; // original text baseline, fraction of page height (top-origin)
+  fontHeightFrac: number; // original font height, fraction of page height
   originalText: string; // original text (for reference only)
   newText: string; // replacement text
-  fontSize: number; // estimated PDF font size in points (for re-drawing)
 }
 
 export type Annotation = RectAnnot | NoteAnnot | InkAnnot | TextEditAnnot;

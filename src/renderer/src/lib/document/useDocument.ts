@@ -1,5 +1,5 @@
 import { useReducer, useCallback, useEffect, useRef } from "react";
-import { open as dialogOpen, confirm } from "@tauri-apps/plugin-dialog";
+import { open as dialogOpen, confirm, message } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { loadPdf } from "../pdf";
@@ -177,6 +177,13 @@ export function useDocument() {
         opts,
       );
       await writeToPath(target, bytes);
+    } catch (err) {
+      // Surface burn-in / write failures instead of failing silently, so the
+      // user knows the finalized PDF was not produced (and why).
+      await message(
+        `確定保存に失敗しました: ${err instanceof Error ? err.message : String(err)}`,
+        { title: "保存エラー", kind: "error" },
+      );
     } finally {
       setBusy(false);
     }

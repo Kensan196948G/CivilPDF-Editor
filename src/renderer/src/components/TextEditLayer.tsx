@@ -5,8 +5,9 @@ import type { Annotation, FracRect, TextEditAnnot } from "../lib/annotations/typ
 
 interface TextHit {
   text: string;
-  rect: FracRect;
-  fontSize: number; // PDF points
+  rect: FracRect; // whiteout box (covers the original text)
+  baselineFrac: number; // baseline y as fraction of page height (top-origin)
+  fontHeightFrac: number; // font height as fraction of page height (scale-independent)
 }
 
 interface Props {
@@ -65,21 +66,26 @@ export function TextEditLayer({
             item.transform[5],
           );
 
-          // Font height ≈ magnitude of (c, d) column (y-scale of the matrix).
-          const fontSize = Math.sqrt(
+          // Font height = magnitude of the (c, d) matrix column, in PDF units.
+          // item.transform is in PDF space, so multiply by `scale` to reach
+          // viewport pixels (same convention as item.width * scale below).
+          const fontPdf = Math.sqrt(
             item.transform[2] * item.transform[2] +
               item.transform[3] * item.transform[3],
           );
-          const vpHeight = Math.max(6, fontSize);
+          const fontVp = Math.max(6, fontPdf * scale);
           const vpWidth = Math.max(4, item.width * scale);
 
-          // vpBaselineY is distance from top; text sits ABOVE the baseline.
-          const vpTop = vpBaselineY - vpHeight;
+          // vpBaselineY is distance from top; text sits ABOVE the baseline. The
+          // whiteout box starts a full font-height above the baseline and runs a
+          // little past it (1.25×) to cover ascenders and descenders.
+          const vpTop = vpBaselineY - fontVp;
           const vpLeft = vpX;
+          const boxH = fontVp * 1.25;
 
           // Skip items outside the visible page area.
           if (vpLeft + vpWidth < 0 || vpLeft > viewportWidth) continue;
-          if (vpTop + vpHeight < 0 || vpTop > viewportHeight) continue;
+          if (vpTop + boxH < 0 || vpTop > viewportHeight) continue;
 
           result.push({
             text: item.str,
@@ -87,12 +93,10 @@ export function TextEditLayer({
               x: Math.max(0, vpLeft / viewportWidth),
               y: Math.max(0, vpTop / viewportHeight),
               w: Math.min(1 - Math.max(0, vpLeft / viewportWidth), vpWidth / viewportWidth),
-              h: Math.min(
-                1 - Math.max(0, vpTop / viewportHeight),
-                (vpHeight * 1.25) / viewportHeight,
-              ),
+              h: Math.min(1 - Math.max(0, vpTop / viewportHeight), boxH / viewportHeight),
             },
-            fontSize,
+            baselineFrac: vpBaselineY / viewportHeight,
+            fontHeightFrac: fontVp / viewportHeight,
           });
         }
         setHits(result);
@@ -123,9 +127,10 @@ export function TextEditLayer({
       page: pageIndex,
       color: "#000000",
       rect: hit.rect,
+      baselineFrac: hit.baselineFrac,
+      fontHeightFrac: hit.fontHeightFrac,
       originalText: hit.text,
       newText: trimmed,
-      fontSize: hit.fontSize,
     };
     onAdd(annot);
     setEditing(null);

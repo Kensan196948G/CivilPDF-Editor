@@ -25,9 +25,10 @@ describe("AnnotationOverlay — text edit rendering", () => {
     color: "#000000",
     kind: "textedit",
     rect: { x: 0.1, y: 0.1, w: 0.3, h: 0.03 },
+    baselineFrac: 0.124,
+    fontHeightFrac: 0.024,
     originalText: "旧テキスト",
     newText: "新しい日本語テキスト",
-    fontSize: 12,
   };
 
   it("renders the replacement text on screen (regression: was dropped as null)", () => {
@@ -46,5 +47,14 @@ describe("AnnotationOverlay — text edit rendering", () => {
     const { container } = renderOverlay([textEdit]);
     const title = container.querySelector("title");
     expect(title?.textContent).toContain("旧テキスト");
+  });
+
+  it("places the text on the original baseline (not box-centered)", () => {
+    const { container } = renderOverlay([textEdit]);
+    const text = container.querySelector("text");
+    // baselineFrac 0.124 → y = "12.4%"; default (alphabetic) baseline so the
+    // glyph sits exactly where the original text's baseline was.
+    expect(text?.getAttribute("y")).toBe("12.4%");
+    expect(text?.getAttribute("dominant-baseline")).toBeNull();
   });
 });

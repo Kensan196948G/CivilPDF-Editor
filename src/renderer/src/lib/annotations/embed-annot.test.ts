@@ -82,9 +82,10 @@ const ALL_KINDS: Annotation[] = [
     color: "#000000",
     kind: "textedit",
     rect: { x: 0.1, y: 0.4, w: 0.3, h: 0.03 },
+    baselineFrac: 0.424,
+    fontHeightFrac: 0.024,
     originalText: "旧テキスト",
     newText: "修正後の日本語テキスト", // burned with the bundled CJK font
-    fontSize: 12,
   },
 ];
 
@@ -156,9 +157,10 @@ describe("embedAnnotationsIntoPdf", () => {
       color: "#000000",
       kind: "textedit",
       rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.03 },
+      baselineFrac: 0.124,
+      fontHeightFrac: 0.024,
       originalText: "変更前",
       newText: "確定後に反映される日本語",
-      fontSize: 12,
     };
     const out = await embedAnnotationsIntoPdf(src, [edit]);
     expectPdfMagic(out);
@@ -176,9 +178,10 @@ describe("embedAnnotationsIntoPdf", () => {
       color: "#000000",
       kind: "textedit",
       rect: { x: 0.1, y: 0.1, w: 0.3, h: 0.03 },
+      baselineFrac: 0.124,
+      fontHeightFrac: 0.024,
       originalText: "x",
       newText: "",
-      fontSize: 12,
     };
     const out = await embedAnnotationsIntoPdf(src, [edit]);
     expectPdfMagic(out);

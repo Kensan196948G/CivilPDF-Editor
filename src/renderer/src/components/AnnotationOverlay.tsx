@@ -141,9 +141,9 @@ function TextEditAnnotSvg({
 }): React.JSX.Element {
   const onClick = onErase ? (e: React.MouseEvent) => { e.stopPropagation(); onErase(annot.id); } : undefined;
   const r = annot.rect;
-  // Box height on screen (px); size the text to ~80% of it.
-  const boxPx = Math.max(6, r.h * viewportHeight);
-  const fontPx = Math.max(6, Math.min(annot.fontSize, boxPx * 0.85));
+  // Match the original: same font height and same baseline (both page-height
+  // fractions, so they scale with the viewport).
+  const fontPx = Math.max(6, annot.fontHeightFrac * viewportHeight);
   return (
     <g onClick={onClick} style={{ cursor: onErase ? "pointer" : "default" }}>
       <rect
@@ -155,8 +155,7 @@ function TextEditAnnotSvg({
       />
       <text
         x={`calc(${r.x * 100}% + 1px)`}
-        y={`${(r.y + r.h / 2) * 100}%`}
-        dominantBaseline="central"
+        y={`${annot.baselineFrac * 100}%`}
         fontSize={fontPx}
         fill="#000000"
       >

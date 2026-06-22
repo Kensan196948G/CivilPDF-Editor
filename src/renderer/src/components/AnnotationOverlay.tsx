@@ -83,8 +83,10 @@ function NoteAnnotSvg({ annot, onErase }: { annot: NoteAnnot; onErase?: (id: str
         fillOpacity={0.85}
       />
       <text
-        x={`calc(${annot.x * 100}% + 12px)`}
-        y={`calc(${annot.y * 100}% + 16px)`}
+        x={`${annot.x * 100}%`}
+        dx={12}
+        y={`${annot.y * 100}%`}
+        dy={16}
         textAnchor="middle"
         fontSize="14"
         fill="#333"
@@ -154,7 +156,8 @@ function TextEditAnnotSvg({
         fill="#ffffff"
       />
       <text
-        x={`calc(${r.x * 100}% + 1px)`}
+        x={`${r.x * 100}%`}
+        dx={1}
         y={`${annot.baselineFrac * 100}%`}
         fontSize={fontPx}
         fill="#000000"

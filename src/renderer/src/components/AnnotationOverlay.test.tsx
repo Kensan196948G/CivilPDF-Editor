@@ -57,4 +57,14 @@ describe("AnnotationOverlay — text edit rendering", () => {
     expect(text?.getAttribute("y")).toBe("12.4%");
     expect(text?.getAttribute("dominant-baseline")).toBeNull();
   });
+
+  it("positions x with a plain percentage + dx, never calc() (WebKitGTK ignores SVG calc)", () => {
+    const { container } = renderOverlay([textEdit]);
+    const text = container.querySelector("text");
+    // rect.x 0.1 → "10%". A pixel inset must come from dx, not calc() in the
+    // attribute (which the Tauri webview drops, snapping x to 0 = far left).
+    expect(text?.getAttribute("x")).toBe("10%");
+    expect(text?.getAttribute("x")).not.toContain("calc");
+    expect(text?.getAttribute("dx")).toBe("1");
+  });
 });

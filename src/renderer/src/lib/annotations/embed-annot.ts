@@ -1,7 +1,9 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import type { RGB, PDFFont, PDFPage } from "pdf-lib";
 import type { Annotation, FracRect } from "./types";
 import { fracPointToPdf, fracRectToPdf } from "../geometry";
+import { loadCjkFontBytes } from "./cjk-font";
 
 /** Opacity used when painting highlight rectangles. */
 const HIGHLIGHT_OPACITY = 0.35;
@@ -76,10 +78,11 @@ function drawRuleLines(
 }
 
 /**
- * Draw a sticky-note marker: a small square icon plus an ASCII "!" badge.
- * The note body text is intentionally not rendered — the standard Helvetica
- * font cannot encode non-ASCII (e.g. Japanese) glyphs, so we keep the burned
- * marker icon-only and leave the text in the editable annotation layer.
+ * Draw a sticky-note marker: a small square icon plus a "!" badge.
+ * The note body text is intentionally not rendered into the flattened PDF — the
+ * marker stays icon-only and the text lives in the editable annotation layer
+ * (rendering arbitrary-length note bodies in a fixed marker is a separate UX
+ * concern). The badge uses the bundled CJK font, so ASCII renders fine.
  */
 function drawNoteMarker(
   page: PDFPage,
@@ -133,19 +136,20 @@ function drawInk(
  * Draw a text-edit annotation: first burn a white rectangle (whiteout) over
  * the original text bounding box, then draw the replacement text on top.
  *
- * Helvetica (StandardFonts) only covers printable ASCII.  Non-ASCII characters
- * are stripped so that embedding never throws; the caller's UI should warn the
- * user if the resulting string would be empty.
+ * Uses the bundled NotoSansJP font, so Japanese (and other CJK) replacement
+ * text renders correctly rather than being dropped. The font size is shrunk to
+ * keep the new text on a single line within the whiteout box width (CJK has no
+ * spaces, so pdf-lib's word-wrap would not help).
  */
-function drawTextEdit(
+async function drawTextEdit(
   page: PDFPage,
   rect: FracRect,
   newText: string,
   fontSize: number,
-  font: PDFFont,
+  getFont: () => Promise<PDFFont>,
   pw: number,
   ph: number,
-): void {
+): Promise<void> {
   const r = fracRectToPdf(rect, pw, ph);
 
   // 1. Whiteout: paint white rectangle over the original text area.
@@ -158,21 +162,28 @@ function drawTextEdit(
     opacity: 1,
   });
 
-  // 2. Strip non-ASCII characters (Helvetica limitation).
-  const safeText = newText.replace(/[^\x20-\x7E]/g, "");
-  if (!safeText) return; // nothing printable to draw
+  // Nothing to draw (e.g. text deletion): skip font embedding entirely so an
+  // unused subset (zero glyphs) never reaches fontkit, which would throw.
+  if (!newText) return;
+  const font = await getFont();
 
-  // 3. Clamp font size to fit within the whiteout box height.
-  const size = Math.max(4, Math.min(fontSize, r.height * 0.85));
+  // 2. Start from the original font size, clamped to the box height.
+  let size = Math.max(4, Math.min(fontSize, r.height * 0.85));
 
-  // 4. Draw replacement text at the baseline (r.y + small margin).
-  page.drawText(safeText, {
+  // 3. Shrink to fit the box width on a single line (min 4pt).
+  const maxWidth = Math.max(1, r.width - 2);
+  const textWidth = font.widthOfTextAtSize(newText, size);
+  if (textWidth > maxWidth) {
+    size = Math.max(4, (size * maxWidth) / textWidth);
+  }
+
+  // 4. Draw the replacement text vertically centred in the whiteout box.
+  page.drawText(newText, {
     x: r.x + 1,
     y: r.y + (r.height - size) / 2,
     size,
     font,
     color: rgb(0, 0, 0),
-    maxWidth: r.width - 2,
   });
 }
 
@@ -185,13 +196,18 @@ export async function embedAnnotationsIntoPdf(
   annotations: Annotation[],
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.load(bytes);
+  doc.registerFontkit(fontkit);
   const pages = doc.getPages();
 
-  // Lazily embed the standard font; only needed for note markers.
-  let helvetica: PDFFont | null = null;
+  // Lazily embed the bundled CJK font as a subset (only used glyphs are written
+  // to the output). Needed for text edits and note markers; supports Japanese.
+  let cjkFont: PDFFont | null = null;
   const getFont = async (): Promise<PDFFont> => {
-    if (!helvetica) helvetica = await doc.embedFont(StandardFonts.Helvetica);
-    return helvetica;
+    if (!cjkFont) {
+      const fontBytes = await loadCjkFontBytes();
+      cjkFont = await doc.embedFont(fontBytes, { subset: true });
+    }
+    return cjkFont;
   };
 
   for (const annot of annotations) {
@@ -218,7 +234,7 @@ export async function embedAnnotationsIntoPdf(
         drawInk(page, annot.strokes, color, annot.width, pw, ph);
         break;
       case "textedit":
-        drawTextEdit(page, annot.rect, annot.newText, annot.fontSize, await getFont(), pw, ph);
+        await drawTextEdit(page, annot.rect, annot.newText, annot.fontSize, getFont, pw, ph);
         break;
     }
   }

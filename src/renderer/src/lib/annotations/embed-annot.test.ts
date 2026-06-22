@@ -1,7 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { resolve, dirname } from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { embedAnnotationsIntoPdf, hexToRgb } from "./embed-annot";
 import type { Annotation } from "./types";
+
+// jsdom cannot fetch Vite asset URLs, so load the real bundled font from disk.
+vi.mock("./cjk-font", () => ({
+  loadCjkFontBytes: async (): Promise<Uint8Array> => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const fontPath = resolve(here, "../../assets/fonts/NotoSansJP-Regular.otf");
+    return new Uint8Array(readFileSync(fontPath));
+  },
+}));
 
 /** Build a plain 2-page PDF for embedding tests. */
 async function makeTwoPagePdf(): Promise<Uint8Array> {
@@ -64,7 +76,22 @@ const ALL_KINDS: Annotation[] = [
       ],
     ],
   },
+  {
+    id: "t1",
+    page: 0,
+    color: "#000000",
+    kind: "textedit",
+    rect: { x: 0.1, y: 0.4, w: 0.3, h: 0.03 },
+    originalText: "旧テキスト",
+    newText: "修正後の日本語テキスト", // burned with the bundled CJK font
+    fontSize: 12,
+  },
 ];
+
+/** The vector-only annotation kinds (no font needed). */
+const VECTOR_KINDS = ALL_KINDS.filter(
+  (a) => a.kind !== "note" && a.kind !== "textedit",
+);
 
 describe("hexToRgb", () => {
   it("parses #rrggbb", () => {
@@ -113,12 +140,49 @@ describe("embedAnnotationsIntoPdf", () => {
     expect(doc.getPageCount()).toBe(2);
   });
 
-  it("only embeds the font when a note is present", async () => {
+  it("only embeds the CJK font for text-bearing annotations", async () => {
     const src = await makeTwoPagePdf();
-    const withoutNote = ALL_KINDS.filter((a) => a.kind !== "note");
-    const noNote = await embedAnnotationsIntoPdf(src, withoutNote);
-    const withNote = await embedAnnotationsIntoPdf(src, ALL_KINDS);
-    // A note adds a marker plus the embedded Helvetica font program.
-    expect(withNote.length).toBeGreaterThan(noNote.length);
+    const vectorOnly = await embedAnnotationsIntoPdf(src, VECTOR_KINDS);
+    const withText = await embedAnnotationsIntoPdf(src, ALL_KINDS);
+    // note + textedit pull in the embedded NotoSansJP subset; vector kinds do not.
+    expect(withText.length).toBeGreaterThan(vectorOnly.length);
+  });
+
+  it("burns a Japanese text-edit replacement (embeds CJK glyphs, not a bare whiteout)", async () => {
+    const src = await makeTwoPagePdf();
+    const edit: Annotation = {
+      id: "te-jp",
+      page: 0,
+      color: "#000000",
+      kind: "textedit",
+      rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.03 },
+      originalText: "変更前",
+      newText: "確定後に反映される日本語",
+      fontSize: 12,
+    };
+    const out = await embedAnnotationsIntoPdf(src, [edit]);
+    expectPdfMagic(out);
+    // A bare whiteout rectangle adds only a few hundred bytes; embedding the CJK
+    // subset for the Japanese glyphs grows the file by several KB. This guards
+    // against the regression where non-ASCII text was stripped before drawing.
+    expect(out.length).toBeGreaterThan(src.length + 2000);
+  });
+
+  it("whiteouts without drawing when the replacement text is empty", async () => {
+    const src = await makeTwoPagePdf();
+    const edit: Annotation = {
+      id: "te-empty",
+      page: 0,
+      color: "#000000",
+      kind: "textedit",
+      rect: { x: 0.1, y: 0.1, w: 0.3, h: 0.03 },
+      originalText: "x",
+      newText: "",
+      fontSize: 12,
+    };
+    const out = await embedAnnotationsIntoPdf(src, [edit]);
+    expectPdfMagic(out);
+    const doc = await PDFDocument.load(out);
+    expect(doc.getPageCount()).toBe(2);
   });
 });

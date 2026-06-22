@@ -1,9 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PageView } from "./components/PageView";
 import { StampToolbar } from "./components/StampToolbar";
 import { ZoomControls } from "./components/ZoomControls";
 import { OcrPanel } from "./components/OcrPanel";
 import { ReviewPanel } from "./components/ReviewPanel";
+import { DxSyncButton } from "./components/DxSyncButton";
+import { DxSettingsModal } from "./components/DxSettingsModal";
+import { readDxDocId } from "./lib/dx/docid";
 import { PagePanel } from "./components/PagePanel";
 import { AnnotToolbar } from "./components/AnnotToolbar";
 import type { AnnotTool } from "./components/AnnotToolbar";
@@ -54,9 +57,29 @@ export function App(): React.JSX.Element {
   const [showHeaderFooter, setShowHeaderFooter] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [formFields, setFormFields] = useState<FormField[] | null>(null);
+  const [dxDocId, setDxDocId] = useState<string | null>(null);
+  const [showDxSettings, setShowDxSettings] = useState(false);
+
+  // Read the DX document id embedded in the opened PDF's Info dict so the
+  // DxSyncButton can target the right document when syncing the review.
+  useEffect(() => {
+    let cancelled = false;
+    if (state.docBytes) {
+      void readDxDocId(state.docBytes).then((id) => {
+        if (!cancelled) setDxDocId(id);
+      });
+    } else {
+      setDxDocId(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [state.docBytes]);
 
   const scrollToPage = (pageIndex: number): void => {
-    document.getElementById(`page-${pageIndex}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById(`page-${pageIndex}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const clampScale = (s: number): number =>
@@ -108,7 +131,8 @@ export function App(): React.JSX.Element {
     "edit.deletePage": () => {
       if (selectedPage !== null) void doc.removePages([selectedPage]);
     },
-    "edit.insertFrom": () => doc.insertFromFile(selectedPage ?? state.pages.length),
+    "edit.insertFrom": () =>
+      doc.insertFromFile(selectedPage ?? state.pages.length),
     "view.zoomIn": () => doc.setScale(clampScale(state.scale + ZOOM_STEP)),
     "view.zoomOut": () => doc.setScale(clampScale(state.scale - ZOOM_STEP)),
     "view.zoomReset": () => doc.setScale(1.0),
@@ -143,7 +167,11 @@ export function App(): React.JSX.Element {
         <span style={{ fontSize: 12, opacity: 0.8 }}>
           編集・印鑑・OCR・変換
         </span>
-        <button onClick={() => void doc.open()} disabled={state.busy} style={{ ...headerBtn, marginLeft: "auto" }}>
+        <button
+          onClick={() => void doc.open()}
+          disabled={state.busy}
+          style={{ ...headerBtn, marginLeft: "auto" }}
+        >
           {state.busy ? "処理中..." : "PDF を開く"}
         </button>
         {hasDoc && (
@@ -162,17 +190,38 @@ export function App(): React.JSX.Element {
             >
               確定保存
             </button>
-            <span style={{ width: 1, background: "rgba(255,255,255,0.3)", alignSelf: "stretch", margin: "0 4px" }} />
+            <DxSyncButton
+              docId={dxDocId}
+              stamps={state.stamps}
+              annotations={state.annotations}
+              onOpenSettings={() => setShowDxSettings(true)}
+            />
+            <span
+              style={{
+                width: 1,
+                background: "rgba(255,255,255,0.3)",
+                alignSelf: "stretch",
+                margin: "0 4px",
+              }}
+            />
             <button
               onClick={() => setShowSearch((v) => !v)}
-              style={{ ...headerBtn, background: showSearch ? "#fff" : "rgba(255,255,255,0.15)", color: showSearch ? "#1e3a5f" : "#fff" }}
+              style={{
+                ...headerBtn,
+                background: showSearch ? "#fff" : "rgba(255,255,255,0.15)",
+                color: showSearch ? "#1e3a5f" : "#fff",
+              }}
               title="テキスト検索"
             >
               🔍
             </button>
             <button
               onClick={() => setShowBookmarks((v) => !v)}
-              style={{ ...headerBtn, background: showBookmarks ? "#fff" : "rgba(255,255,255,0.15)", color: showBookmarks ? "#1e3a5f" : "#fff" }}
+              style={{
+                ...headerBtn,
+                background: showBookmarks ? "#fff" : "rgba(255,255,255,0.15)",
+                color: showBookmarks ? "#1e3a5f" : "#fff",
+              }}
               title="目次・ブックマーク"
             >
               📑
@@ -180,7 +229,11 @@ export function App(): React.JSX.Element {
             <button
               onClick={() => setShowWatermark(true)}
               disabled={state.busy}
-              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              style={{
+                ...headerBtn,
+                background: "rgba(255,255,255,0.15)",
+                color: "#fff",
+              }}
               title="透かし追加"
             >
               🖊
@@ -188,7 +241,11 @@ export function App(): React.JSX.Element {
             <button
               onClick={() => setShowMetadata(true)}
               disabled={state.busy}
-              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              style={{
+                ...headerBtn,
+                background: "rgba(255,255,255,0.15)",
+                color: "#fff",
+              }}
               title="文書プロパティ"
             >
               📋
@@ -196,16 +253,31 @@ export function App(): React.JSX.Element {
             <button
               onClick={() => setShowPassword(true)}
               disabled={state.busy}
-              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              style={{
+                ...headerBtn,
+                background: "rgba(255,255,255,0.15)",
+                color: "#fff",
+              }}
               title="パスワード保護"
             >
               🔐
             </button>
-            <span style={{ width: 1, background: "rgba(255,255,255,0.3)", alignSelf: "stretch", margin: "0 4px" }} />
+            <span
+              style={{
+                width: 1,
+                background: "rgba(255,255,255,0.3)",
+                alignSelf: "stretch",
+                margin: "0 4px",
+              }}
+            />
             <button
               onClick={() => setShowHeaderFooter(true)}
               disabled={state.busy}
-              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              style={{
+                ...headerBtn,
+                background: "rgba(255,255,255,0.15)",
+                color: "#fff",
+              }}
               title="ヘッダー/フッター追加"
             >
               ⊤⊥
@@ -213,17 +285,28 @@ export function App(): React.JSX.Element {
             <button
               onClick={() => setShowCompare(true)}
               disabled={state.busy}
-              style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff" }}
+              style={{
+                ...headerBtn,
+                background: "rgba(255,255,255,0.15)",
+                color: "#fff",
+              }}
               title="PDF比較"
             >
               ⇆
             </button>
             <button
               onClick={() => {
-                void doc.getFormFields().then((fields) => setFormFields(fields));
+                void doc
+                  .getFormFields()
+                  .then((fields) => setFormFields(fields));
               }}
               disabled={state.busy}
-              style={{ ...headerBtn, background: formFields !== null ? "#fff" : "rgba(255,255,255,0.15)", color: formFields !== null ? "#1e3a5f" : "#fff" }}
+              style={{
+                ...headerBtn,
+                background:
+                  formFields !== null ? "#fff" : "rgba(255,255,255,0.15)",
+                color: formFields !== null ? "#1e3a5f" : "#fff",
+              }}
               title="フォームフィールド確認"
             >
               📝
@@ -232,7 +315,12 @@ export function App(): React.JSX.Element {
         )}
         <button
           onClick={() => setShowImageToPdf(true)}
-          style={{ ...headerBtn, background: "rgba(255,255,255,0.15)", color: "#fff", marginLeft: hasDoc ? 0 : "auto" }}
+          style={{
+            ...headerBtn,
+            background: "rgba(255,255,255,0.15)",
+            color: "#fff",
+            marginLeft: hasDoc ? 0 : "auto",
+          }}
           title="画像→PDF変換"
         >
           🖼
@@ -264,10 +352,16 @@ export function App(): React.JSX.Element {
           selectedPage={selectedPage}
           busy={state.busy}
           onSelectPage={setSelectedPage}
-          onRotate={(delta) => selectedPage !== null && void doc.rotate([selectedPage], delta)}
-          onDelete={() => selectedPage !== null && void doc.removePages([selectedPage])}
+          onRotate={(delta) =>
+            selectedPage !== null && void doc.rotate([selectedPage], delta)
+          }
+          onDelete={() =>
+            selectedPage !== null && void doc.removePages([selectedPage])
+          }
           onMove={handleMovePage}
-          onInsert={() => void doc.insertFromFile(selectedPage ?? state.pages.length)}
+          onInsert={() =>
+            void doc.insertFromFile(selectedPage ?? state.pages.length)
+          }
         />
       )}
 
@@ -302,8 +396,9 @@ export function App(): React.JSX.Element {
           ) : (
             <>
               <div style={{ marginBottom: 12, fontSize: 13, color: "#444" }}>
-                📄 {state.fileName}（{formatBytes(state.docBytes?.byteLength ?? 0)}） /
-                全 {state.pages.length} ページ
+                📄 {state.fileName}（
+                {formatBytes(state.docBytes?.byteLength ?? 0)}） / 全{" "}
+                {state.pages.length} ページ
               </div>
               {state.pages.map((p, i) => (
                 <div
@@ -348,10 +443,7 @@ export function App(): React.JSX.Element {
         )}
 
         {formFields !== null && (
-          <FormPanel
-            fields={formFields}
-            onClose={() => setFormFields(null)}
-          />
+          <FormPanel fields={formFields} onClose={() => setFormFields(null)} />
         )}
       </div>
 
@@ -416,6 +508,9 @@ export function App(): React.JSX.Element {
           onClose={() => setShowCompare(false)}
           busy={state.busy}
         />
+      )}
+      {showDxSettings && (
+        <DxSettingsModal onClose={() => setShowDxSettings(false)} />
       )}
     </div>
   );

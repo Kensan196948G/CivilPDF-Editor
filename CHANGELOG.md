@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-06-22
+
+### 🆕 Added — テキスト編集モード
+
+- **テキスト編集** (`TextEditLayer` + `TextEditAnnot`) — 既存 PDF のテキストをクリックして内容を変更できる「テキスト編集モード」を追加
+  - pdfjs `getTextContent()` でページ上のテキスト位置を自動検出し、薄青色のヒットゾーンを表示
+  - テキストをクリックするとインライン編集ポップアップが開き、元テキストが自動入力された状態でそのまま編集可能
+  - 確定するとホワイトアウト矩形（白塗り）で元テキストを消去し、新テキストをベクターで上書き描画（非破壊 → PDF 保存時に焼き込み）
+  - Enter で確定 / Esc でキャンセル / Shift+Enter で改行入力
+  - ⚠️ ASCII 文字のみ焼き込み可（Helvetica の制約）。日本語テキストの書き換えは次バージョンで対応予定
+
+---
+
 ## [Unreleased]
 
 ### 🆕 Added — M7 機能拡張（v1.1.0 開発中・PR #23）

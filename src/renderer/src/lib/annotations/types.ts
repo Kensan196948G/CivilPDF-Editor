@@ -5,7 +5,7 @@
  * `fracPointToPdf` converters.
  */
 
-export type AnnotKind = "highlight" | "underline" | "strikeout" | "note" | "ink";
+export type AnnotKind = "highlight" | "underline" | "strikeout" | "note" | "ink" | "textedit";
 
 interface AnnotBase {
   id: string;
@@ -48,4 +48,13 @@ export interface InkAnnot extends AnnotBase {
   width: number; // stroke width as fraction of page width (0..1)
 }
 
-export type Annotation = RectAnnot | NoteAnnot | InkAnnot;
+/** Text edit: draws a white rectangle over the original text, then overlays new text. */
+export interface TextEditAnnot extends AnnotBase {
+  kind: "textedit";
+  rect: FracRect; // bounding box of the original text (for whiteout)
+  originalText: string; // original text (for reference only)
+  newText: string; // replacement text
+  fontSize: number; // estimated PDF font size in points (for re-drawing)
+}
+
+export type Annotation = RectAnnot | NoteAnnot | InkAnnot | TextEditAnnot;

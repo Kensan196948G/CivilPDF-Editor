@@ -4,6 +4,7 @@ import type { Stamp } from "../lib/types";
 import type { Annotation } from "../lib/annotations/types";
 import { clamp01 } from "../lib/geometry";
 import { AnnotationOverlay } from "./AnnotationOverlay";
+import { TextEditLayer } from "./TextEditLayer";
 import type { AnnotTool } from "./AnnotToolbar";
 import { buildTileGrid } from "../lib/viewer/tile-grid";
 import type { TileRect } from "../lib/viewer/types";
@@ -118,6 +119,16 @@ export function PageView({
         viewportHeight={viewport.height}
         onAdd={onAddAnnotation}
         onRemove={onRemoveAnnotation}
+      />
+
+      <TextEditLayer
+        page={page}
+        pageIndex={pageIndex}
+        scale={scale}
+        viewportWidth={viewport.width}
+        viewportHeight={viewport.height}
+        active={activeTool === "textedit"}
+        onAdd={onAddAnnotation}
       />
     </div>
   );
